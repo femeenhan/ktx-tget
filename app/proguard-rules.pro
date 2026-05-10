@@ -1,1 +1,1 @@
--keep class dev.trainassist.korail.service.TrainAssistAccessibilityService { *; }
+# ktx-tget — project-specific ProGuard rules are added here when minification is enabled.

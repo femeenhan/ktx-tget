@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">KTX 티겟</string>
-    <string name="accessibility_service_description">KorailTalk list screen: auto refresh until a seat becomes available, then open price and reservation entry. Use only on your own device.</string>
-    <string name="main_instructions">1. Enable accessibility for Train Assist.\n2. Open KorailTalk and reach the KTX search results (sold-out rows).\n3. Return here and turn automation ON.\n4. Switch back to KorailTalk. The app refreshes until a Price button appears, taps it, then taps Reserve. Stops before payment.</string>
-    <string name="open_accessibility_settings">Open accessibility settings</string>
-    <string name="automation_enabled">Automation enabled</string>
-    <string name="automation_disabled">Automation disabled</string>
-    <string name="automation_completed">예매 화면까지 이동했습니다. 자동화를 종료했습니다.</string>
-    <string name="accessibility_not_enabled">Accessibility service is off</string>
+    <string name="app_name">ktx-tget</string>
+    <string name="welcome_message">ktx-tget</string>
 </resources>

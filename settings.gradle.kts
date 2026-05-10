@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TrainAssist"
+rootProject.name = "ktx-tget"
 include(":app")

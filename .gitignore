@@ -1,13 +1,28 @@
+# Gradle
+.gradle/
+build/
+
+# Android / Kotlin
+local.properties
 *.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-**/build
-**/captures
-.externalNativeBuild
-.cxx
+.idea/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# Build outputs
 *.apk
 *.ap_
 *.aab
+*.dex
+**/outputs/
+
+# Keystore (do not commit secrets)
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+
+# Logs
+*.log
