@@ -5,7 +5,7 @@
     <string name="accessibility_service_description">코레일 열차 목록에서 취소표 매크로를 위해 화면 내용을 읽습니다.</string>
     <string name="open_accessibility_settings">접근성 설정 열기</string>
     <string name="macro_enabled_label">매크로 실행 (코레일 목록)</string>
-    <string name="refresh_interval_ms_hint">새로고침 간격 (ms, 최소 2000)</string>
+    <string name="refresh_interval_ms_hint">새로고침 간격 (ms, 2000~3000)</string>
     <string name="apply_refresh_interval">간격 적용</string>
     <string name="special_use_fgs_macro_subtype">Shows an ongoing notification while the Korail ticket macro is enabled.</string>
     <string name="notification_channel_macro_running_name">매크로 실행</string>
@@ -19,13 +19,15 @@
     <string name="nav_main">설정</string>
     <string name="nav_log">로그</string>
     <string name="main_screen_title">매크로 설정</string>
+    <string name="train_list_scope_title">열차 목록·출발 시각 안내</string>
+    <string name="train_list_scope_body">이 앱은 코레일톡 열차 목록에서 화면에 보이는 행만 감지·탭합니다. 새로고침을 하면 목록이 위쪽부터 다시 그려지므로, 원하시는 시간대의 열차가 항상 목록 최상단에 오도록 코레일톡에서 출발 시각을 맞춰 두는 것이 필요합니다. 화면에 나타나지 않는 열차는 매크로 대상에서 제외됩니다.</string>
     <string name="log_screen_title">실행 로그</string>
     <string name="log_clear_button">로그 지우기</string>
     <string name="refresh_interval_slider_label">새로고침 간격: %d ms</string>
-    <string name="exclude_freeseat_label">「자유석」 문구 포함 행 제외 (행 전체·일반실 칸 등)</string>
-    <string name="general_seat_filters_heading">일반실 칸 문구 기준 제외</string>
-    <string name="exclude_general_standing_combo_label">「입석+좌석」 일반실 칸 행 제외</string>
-    <string name="exclude_general_standing_only_label">「입석」만 표시된 일반실 칸 행 제외</string>
+    <string name="exclude_freeseat_label">자유석 제외</string>
+    <string name="general_seat_filters_heading">일반실 선택 옵션</string>
+    <string name="exclude_general_standing_combo_label">입석+좌석 제외</string>
+    <string name="exclude_general_standing_only_label">입석 제외</string>
     <string name="excluded_trains_hint">제외 열차번호 (3자리)</string>
     <string name="excluded_trains_support">목록에 나오는 열차번호는 서로 겹치지 않는 3자리 숫자입니다. 예: 116, 082 처럼 쉼표로 구분해 입력하세요. 취소표 탭 등에서 중간 정차 안내 대화상자가 자주 뜨는 열차는 여기서 번호로 제외하거나, 아래 「정차 안내 자동 확인」을 켤 수 있습니다.</string>
     <string name="excluded_trains_placeholder">116, 082</string>
@@ -34,7 +36,7 @@
     <string name="seat_pref_first_only">특실만</string>
     <string name="seat_pref_both_general">둘 다 허용 (일반실 우선)</string>
     <string name="user_alerts_label">승차권 확인 알림 (소리·진동)</string>
-    <string name="auto_confirm_intermediate_stop_label">정차 안내 대화상자 자동 확인 (기본 꺼짐)</string>
-    <string name="auto_confirm_intermediate_stop_support">켜면 「정차하는」 안내와 함께 뜬 확인 버튼을 매크로가 탭합니다. 원하지 않는 경유·정차 열차까지 진행될 수 있으니, 가능하면 제외 열차번호로 막는 것이 안전합니다.</string>
+    <string name="auto_confirm_intermediate_stop_label">정차가 있는 열차 제외</string>
+    <string name="auto_confirm_intermediate_stop_support">켰을 때 티켓팅 하지 않고 다른 열차를 예약합니다. 기본 꺼짐 상태에서는 예매로 이어집니다. 정차 열차를 원치 않을 경우 제외 열차번호에 추가하는 게 안전합니다.</string>
     <string name="apply_filters_button">필터 적용</string>
 </resources>

@@ -39,7 +39,10 @@ class MacroPreferencesRepository(
         p[PrefsKeys.MACRO_ENABLED] ?: false
     }
     val refreshIntervalMs: Flow<Long> = context.macroDataStore.data.map { p: Preferences ->
-        p[PrefsKeys.REFRESH_INTERVAL_MS] ?: REFRESH_DEFAULT_MS
+        (p[PrefsKeys.REFRESH_INTERVAL_MS] ?: REFRESH_DEFAULT_MS).coerceIn(
+            MIN_REFRESH_MS,
+            MAX_REFRESH_MS,
+        )
     }
     val macroSettings: Flow<MacroSettings> = context.macroDataStore.data.map { p: Preferences ->
         preferencesToMacroSettings(p)
@@ -153,7 +156,7 @@ class MacroPreferencesRepository(
     companion object {
         private const val REFRESH_DEFAULT_MS: Long = 2500L
         const val MIN_REFRESH_MS: Long = 2000L
-        const val MAX_REFRESH_MS: Long = 5000L
+        const val MAX_REFRESH_MS: Long = 3000L
         const val REFRESH_STEP_MS: Long = 250L
     }
 }
