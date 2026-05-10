@@ -1,0 +1,1 @@
+-keep class dev.trainassist.korail.service.TrainAssistAccessibilityService { *; }

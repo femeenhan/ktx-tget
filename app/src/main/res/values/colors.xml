@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="train_primary">#FF0D47A1</color>
+    <color name="train_primary_container">#FFDDE7FF</color>
+    <color name="train_on_primary">#FFFFFFFF</color>
+    <color name="train_icon">#FFFFFFFF</color>
+</resources>
