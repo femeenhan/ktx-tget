@@ -6,6 +6,6 @@
     <string name="open_accessibility_settings">Open accessibility settings</string>
     <string name="automation_enabled">Automation enabled</string>
     <string name="automation_disabled">Automation disabled</string>
-    <string name="automation_completed">Opened reservation entry. Automation turned off.</string>
+    <string name="automation_completed">예매 화면까지 이동했습니다. 자동화를 종료했습니다.</string>
     <string name="accessibility_not_enabled">Accessibility service is off</string>
 </resources>
