@@ -16,12 +16,24 @@
 
 ## 1-1. APK 파일 받기
 
-Google Drive 링크 또는 카카오톡으로 받은 `ktx-tget-preview.apk` 를 **휴대폰에 저장**합니다.
+APK(`.apk`)는 **Gmail·카카오톡에서 직접 보내기가 차단**되는 경우가 많습니다. 아래 방법 중 하나를 사용하세요.
 
-- **Google Drive:** 링크 열기 → APK **다운로드** → **내 파일** 앱 → **다운로드** 폴더
-- **카카오톡:** 파일 → **저장** → **내 파일** → **KakaoTalk** 또는 **다운로드** 폴더
+### 방법 1 — Google Drive (권장)
 
-> Gmail 첨부는 보안상 차단되는 경우가 많습니다. Drive 링크·카카오톡을 사용하세요.
+1. 판매자가 보낸 **Drive 링크** 열기
+2. `ktx-tget-preview.apk` **다운로드**
+3. **내 파일** → **다운로드** 폴더
+
+### 방법 2 — 카카오톡 ZIP 파일
+
+카카오톡은 `.apk` 는 「지원하지 않는 형식」으로 막지만, **`.zip` 은 전송 가능**합니다.
+
+1. 판매자가 보낸 `ktx-tget-preview-kakao.zip` 저장
+2. **내 파일** → **다운로드** (또는 **KakaoTalk** 폴더) → zip 파일 탭
+3. **압축 해제** (또는 **Extract**) → `ktx-tget-preview.apk` 확인
+4. 압축 해제가 어려우면 zip을 PC로 옮겨 풀거나, 판매자에게 **Drive 링크**를 요청하세요.
+
+> **판매자:** `./scripts/build_preview_apk.sh` 실행 시 `dist/ktx-tget-preview-kakao.zip` 이 함께 생성됩니다. 카카오톡에는 **zip** 만 보내세요.
 
 ---
 
