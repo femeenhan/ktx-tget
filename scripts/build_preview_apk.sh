@@ -24,4 +24,6 @@ fi
 
 cp "${APK_SRC}" "${DIST_DIR}/${OUTPUT_NAME}"
 echo ">> Wrote ${DIST_DIR}/${OUTPUT_NAME}"
+echo ">> Send via Google Drive link or KakaoTalk (Gmail APK attachments are often blocked)."
+echo ">> Buyers may need to turn OFF Play Protect scanning before install (see docs/buyer_setup_guide.md §1-2)."
 echo ">> Send this APK so the buyer can install it, copy their device ID, and send it back."
