@@ -1,0 +1,6 @@
+## Android SDK path (Android Studio default shown)
+sdk.dir=/path/to/Android/sdk
+
+## Optional: lock debug/release builds to your test device (ANDROID_ID).
+## Leave empty for unrestricted debug builds.
+# allowedDeviceId=

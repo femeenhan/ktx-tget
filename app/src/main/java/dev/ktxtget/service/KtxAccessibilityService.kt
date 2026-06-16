@@ -18,6 +18,7 @@ import dev.ktxtget.domain.MacroSettings
 import dev.ktxtget.domain.TrainRow
 import dev.ktxtget.runtime.MacroRuntimeLog
 import dev.ktxtget.util.NodeFinder
+import dev.ktxtget.util.DeviceLicense
 import dev.ktxtget.util.NotificationHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +63,13 @@ class KtxAccessibilityService : AccessibilityService() {
                         ticketConfirmationHandled.set(false)
                     }
                     prevMacroEnabled = enabledNow
+                    if (!DeviceLicense.isLicensed(applicationContext)) {
+                        if (enabledNow) {
+                            repository.setMacroEnabled(false)
+                        }
+                        delay(POLL_WHEN_DISABLED_MS)
+                        continue
+                    }
                     if (!enabledNow) {
                         delay(POLL_WHEN_DISABLED_MS)
                         continue
@@ -303,7 +311,7 @@ class KtxAccessibilityService : AccessibilityService() {
             return false
         }
         val settings: MacroSettings = repository.readMacroSettings()
-        NotificationHelper.triggerUserAlert(applicationContext, settings.userAlertsEnabled)
+        NotificationHelper.triggerUserAlert(applicationContext, settings.ticketAlertMode)
         waitingForReserve = false
         repository.setMacroEnabled(false)
         runtimeLog("ticket", "승차권 정보 확인 ($source) — 매크로 중지")

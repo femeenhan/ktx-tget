@@ -15,7 +15,7 @@ data class MacroSettings(
     val excludeGeneralStandingComboRows: Boolean = false,
     val excludeGeneralStandingOnlyRows: Boolean = false,
     val seatClickPreference: SeatClickPreference,
-    val userAlertsEnabled: Boolean = true,
+    val ticketAlertMode: TicketAlertMode = TicketAlertMode.STRONG,
     /** When true, taps 「확인」 on intermediate-stop notice dialogs (코레일 문구 기준). Default off for safety. */
     val autoConfirmIntermediateStopDialog: Boolean = false,
 ) {
@@ -26,7 +26,7 @@ data class MacroSettings(
             excludeGeneralStandingComboRows = false,
             excludeGeneralStandingOnlyRows = false,
             seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
-            userAlertsEnabled = true,
+            ticketAlertMode = TicketAlertMode.STRONG,
             autoConfirmIntermediateStopDialog = false,
         )
     }

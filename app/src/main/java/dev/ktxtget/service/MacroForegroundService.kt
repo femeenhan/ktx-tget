@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import dev.ktxtget.data.MacroPreferencesRepository
+import dev.ktxtget.util.DeviceLicense
 import dev.ktxtget.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,9 @@ class MacroForegroundService : Service() {
 
     companion object {
         fun start(context: android.content.Context) {
+            if (!DeviceLicense.isLicensed(context)) {
+                return
+            }
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, MacroForegroundService::class.java),

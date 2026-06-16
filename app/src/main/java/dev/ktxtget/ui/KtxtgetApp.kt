@@ -1,9 +1,10 @@
 package dev.ktxtget.ui
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -47,7 +48,7 @@ fun KtxtgetApp(repository: MacroPreferencesRepository) {
                         }
                     },
                     icon = {
-                        Icon(Icons.Filled.Settings, contentDescription = null)
+                        Icon(Icons.Filled.Home, contentDescription = null)
                     },
                     label = { Text(stringResource(R.string.nav_main)) },
                 )
@@ -73,7 +74,9 @@ fun KtxtgetApp(repository: MacroPreferencesRepository) {
         NavHost(
             navController = navController,
             startDestination = Routes.MAIN,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier
+                .padding(innerPadding)
+                .imePadding(),
         ) {
             composable(Routes.MAIN) {
                 MainScreen(repository = repository)

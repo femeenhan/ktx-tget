@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.ktxtget.domain.MacroSettings
 import dev.ktxtget.domain.SeatClickPreference
+import dev.ktxtget.domain.TicketAlertMode
 import dev.ktxtget.domain.TrainExcludeNumbersParser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,7 @@ class MacroPreferencesRepository(
         val EXCLUDE_GENERAL_STANDING_COMBO = booleanPreferencesKey("exclude_general_standing_combo")
         val EXCLUDE_GENERAL_STANDING_ONLY = booleanPreferencesKey("exclude_general_standing_only")
         val SEAT_PREF = stringPreferencesKey("seat_click_pref")
+        val TICKET_ALERT_MODE = stringPreferencesKey("ticket_alert_mode")
         val USER_ALERTS_ENABLED = booleanPreferencesKey("user_alerts_enabled")
         val AUTO_CONFIRM_INTERMEDIATE_STOP = booleanPreferencesKey("auto_confirm_intermediate_stop_dialog")
     }
@@ -110,9 +112,9 @@ class MacroPreferencesRepository(
         }
     }
 
-    suspend fun setUserAlertsEnabled(value: Boolean) {
+    suspend fun setTicketAlertMode(value: TicketAlertMode) {
         context.macroDataStore.edit { preferences ->
-            preferences[PrefsKeys.USER_ALERTS_ENABLED] = value
+            preferences[PrefsKeys.TICKET_ALERT_MODE] = value.name
         }
     }
 
@@ -139,7 +141,7 @@ class MacroPreferencesRepository(
         } catch (_: IllegalArgumentException) {
             SeatClickPreference.BOTH_PREFER_GENERAL
         }
-        val userAlertsEnabled: Boolean = p[PrefsKeys.USER_ALERTS_ENABLED] ?: true
+        val ticketAlertMode: TicketAlertMode = resolveTicketAlertMode(p)
         val autoConfirmIntermediateStopDialog: Boolean =
             p[PrefsKeys.AUTO_CONFIRM_INTERMEDIATE_STOP] ?: false
         return MacroSettings(
@@ -148,9 +150,26 @@ class MacroPreferencesRepository(
             excludeGeneralStandingComboRows = excludeGeneralStandingComboRows,
             excludeGeneralStandingOnlyRows = excludeGeneralStandingOnlyRows,
             seatClickPreference = seatClickPreference,
-            userAlertsEnabled = userAlertsEnabled,
+            ticketAlertMode = ticketAlertMode,
             autoConfirmIntermediateStopDialog = autoConfirmIntermediateStopDialog,
         )
+    }
+
+    private fun resolveTicketAlertMode(p: Preferences): TicketAlertMode {
+        val modeName: String? = p[PrefsKeys.TICKET_ALERT_MODE]
+        if (modeName != null) {
+            return try {
+                TicketAlertMode.valueOf(modeName)
+            } catch (_: IllegalArgumentException) {
+                TicketAlertMode.STRONG
+            }
+        }
+        val legacyEnabled: Boolean = p[PrefsKeys.USER_ALERTS_ENABLED] ?: true
+        return if (legacyEnabled) {
+            TicketAlertMode.STRONG
+        } else {
+            TicketAlertMode.OFF
+        }
     }
 
     companion object {

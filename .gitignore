@@ -16,6 +16,7 @@ captures/
 *.aab
 *.dex
 **/outputs/
+dist/
 
 # Keystore (do not commit secrets)
 *.jks
