@@ -14,11 +14,11 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-val allowedDeviceId: String = (
-    project.findProperty("allowedDeviceId") as String?
-        ?: localProperties.getProperty("allowedDeviceId")
-        ?: ""
-    ).trim().lowercase()
+val licenseSecret: String = (
+    project.findProperty("licenseSecret") as String?
+        ?: localProperties.getProperty("licenseSecret")
+        ?: "ktxtget-default-secret"
+    ).trim()
 
 android {
     namespace = "dev.ktxtget"
@@ -30,7 +30,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "ALLOWED_DEVICE_ID", "\"$allowedDeviceId\"")
+        buildConfigField("String", "LICENSE_SECRET", "\"$licenseSecret\"")
     }
     buildTypes {
         release {

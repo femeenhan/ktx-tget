@@ -2,153 +2,185 @@
 
 이 앱은 Play Store 등 공식 스토어 배포가 어렵습니다. **APK 파일을 직접 전달해 설치(사이드로드)** 하는 방식으로 배포합니다.
 
-일반 사용자는 **설정 화면에서 Android ID를 바로 확인할 수 없습니다.**  
-그래서 **미리보기 APK → 기기 ID 복사 → 등록 APK** 순서로 진행합니다.
+APK는 **모든 구매자에게 동일한 파일** 하나를 배포합니다. 구매자는 앱을 설치한 뒤 라이선스 키를 입력해 활성화합니다.
 
 ```text
-① 미리보기 APK 설치  →  ② 앱에서 기기 ID 복사·전달
+① APK 설치 (1회)
         ↓
-③ 판매자가 ID 전용 APK 빌드  →  ④ 등록 APK 덮어쓰기 설치  →  ⑤ 접근성·알림 설정
+② 앱에서 기기 ID 복사 → 판매자에게 전송
+        ↓
+③ 판매자가 라이선스 키 생성 (1초) → 구매자에게 전송
+        ↓
+④ 앱에서 라이선스 키 입력 → 활성화
+        ↓
+⑤ 접근성·알림 설정
 ```
 
 ---
 
-## 1. 판매자: APK 빌드
+## 1. 판매자: APK 빌드 및 키 발급
 
-### 1-1. 미리보기 APK (기기 ID 확인용)
+### 1-1. 사전 준비 — licenseSecret 설정
 
-구매자에게 **먼저** 보내는 APK입니다. 매크로는 동작하지 않고, 앱 화면에 **내 기기 ID** 가 표시됩니다.
+APK를 처음 빌드하기 전에 `local.properties`에 비밀 시크릿을 설정합니다. 이 값으로 라이선스 키가 생성되므로 **한 번 정한 뒤 바꾸지 마세요** (바꾸면 기존 구매자의 키가 모두 무효화됩니다).
+
+```properties
+# local.properties
+sdk.dir=/path/to/Android/sdk
+licenseSecret=여기에_본인만_아는_시크릿_값
+```
+
+> `local.properties`는 `.gitignore`에 포함되어 있어 git에 올라가지 않습니다.
+
+### 1-2. Universal APK 빌드
+
+모든 구매자에게 동일한 APK 하나를 배포합니다.
 
 ```bash
 ./scripts/build_preview_apk.sh
-# → dist/ktx-tget-preview.apk
-# → dist/ktx-tget-preview-kakao.zip
+# → dist/ktx-tget-release.apk
+# → dist/ktx-tget-release-kakao.zip  (카카오톡 전송용)
 ```
 
-### 1-2. 등록 APK (구매자 1인 1기기)
-
-구매자가 보낸 기기 ID로 빌드합니다. **그 구매자에게만** 전달하세요.
+또는 Gradle 직접 실행:
 
 ```bash
-./scripts/build_customer_apk.sh a1b2c3d4e5f67890
-# → dist/ktx-tget-a1b2c3d4e5f67890.apk
-# → dist/ktx-tget-a1b2c3d4e5f67890-kakao.zip
+./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release.apk
 ```
 
-### 1-3. APK 전달 방법 (판매자)
+### 1-3. APK 전달 방법
 
 | 방법 | 파일 | 비고 |
 |------|------|------|
-| **Google Drive 링크** | `ktx-tget-preview.apk` | **가장 권장** |
-| **카카오톡** | `ktx-tget-preview-kakao.zip` | `.apk` 직접 전송 불가 |
+| **Google Drive 링크** | `ktx-tget-release.apk` | **가장 권장** |
+| **카카오톡** | `ktx-tget-release-kakao.zip` | `.apk` 직접 전송 불가 |
 | Gmail 첨부 | — | `.apk`·zip 모두 차단되는 경우 많음 |
 
-빌드:
+### 1-4. 라이선스 키 발급 (구매자가 기기 ID를 보내왔을 때)
+
+구매자가 앱에서 복사해 보낸 기기 ID로 라이선스 키를 즉시 생성합니다.
 
 ```bash
-./scripts/build_preview_apk.sh
-# → dist/ktx-tget-preview.apk
-# → dist/ktx-tget-preview-kakao.zip  (카카오톡용)
+./scripts/generate_key.sh a1b2c3d4e5f67890
+# Device ID  : a1b2c3d4e5f67890
+# License Key: XXXX-XXXX-XXXX-XXXX
 ```
 
-등록 APK도 `./scripts/build_customer_apk.sh <기기ID>` 실행 시 `-kakao.zip` 이 함께 생성됩니다.
+출력된 **License Key**를 구매자에게 전달하세요. APK를 다시 빌드할 필요 없습니다.
 
-### 1-4. 개발·테스트용
+### 1-5. 개발·테스트용
 
 ```bash
 ./gradlew assembleDebug
 # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`installDebug`는 `allowedDeviceId`가 비어 있으면 **개발용으로 기기 제한 없이** 동작합니다.
-
-본인 기기만 고정하려면 `local.properties`에 추가:
-
-```properties
-allowedDeviceId=여기에_본인_기기_ID
-```
+Debug 빌드는 라이선스 검사를 건너뜁니다 (DEV_OPEN 상태).
 
 ---
 
-## 2. 구매자: 미리보기 APK로 기기 ID 확인
+## 2. 구매자: APK 설치 및 활성화
 
-Android ID는 **갤럭시 설정 화면에 표시되지 않습니다.** (일련번호·IMEI와 다릅니다)  
-**미리보기 APK**를 설치하면 앱에서 ID를 확인하고 복사할 수 있습니다.
+### 2-1. APK 설치
 
-### 2-1. 미리보기 APK 설치
+§3의 **갤럭시 APK 설치 방법**으로 APK를 설치합니다.
 
-§3의 **갤럭시 APK 설치 방법**으로 `ktx-tget-preview.apk` 를 설치합니다.
-
-### 2-2. 기기 ID 복사
+### 2-2. 기기 ID 복사 → 판매자에게 전송
 
 1. **ktx-tget** 앱 실행
-2. 상단 **「기기 ID 확인 (미리보기)」** 카드 확인
+2. 상단 **「라이선스 활성화 필요」** 카드 확인
 3. **내 기기 ID** 아래 값 확인 (영문·숫자 16자 내외)
-4. **ID 복사** 버튼 탭
+4. **기기 ID 복사** 버튼 탭
 5. 카카오톡 등으로 **판매자에게 전송**
 
-> 이 단계에서는 **매크로 스위치가 꺼져 있고** 사용할 수 없습니다. 정상입니다.
+> 이 단계에서는 매크로 스위치가 비활성 상태입니다. 정상입니다.
 
-### 2-3. 등록 APK 설치
+### 2-3. 라이선스 키 입력 → 활성화
 
-판매자가 ID를 등록한 **전용 APK**를 받으면, §3과 같이 **덮어쓰기 설치**합니다.  
-미리보기 APK를 삭제할 필요는 없습니다.
+판매자가 보낸 라이선스 키(예: `XXXX-XXXX-XXXX-XXXX`)를 같은 카드의 입력란에 붙여넣고 **활성화** 버튼을 탭합니다.
 
-등록 APK 설치 후에는 미리보기 카드가 사라지고 **매크로를 켤 수 있습니다.**
+- 성공 시: 카드가 사라지고 매크로 스위치를 켤 수 있습니다.
+- 실패 시: "라이선스 키가 올바르지 않습니다" 토스트가 표시됩니다. 키를 다시 확인하세요.
 
 ---
 
 ## 3. 갤럭시(Galaxy)에서 APK 설치하기
 
-미리보기 APK·등록 APK 모두 같은 방법으로 설치합니다.
-
 ### 3-1. APK 파일 받기
 
-**Google Drive 링크**가 가장 안정적입니다. 카카오톡은 `.apk` 를 「지원하지 않는 형식」으로 막으므로 **`…-kakao.zip`** 으로 받아 압축 해제하세요.
+**Google Drive 링크**가 가장 안정적입니다. 카카오톡은 `.apk`를 「지원하지 않는 형식」으로 막으므로 **`…-kakao.zip`** 으로 받아 압축 해제하세요.
 
 - **Google Drive:** 링크 → APK **다운로드** → **내 파일** → **다운로드**
 - **카카오톡:** `ktx-tget-*-kakao.zip` 저장 → **내 파일**에서 **압축 해제** → `.apk` 설치
 - **Gmail:** APK 첨부는 대부분 차단됨 → Drive 링크 사용
 
-### 3-2. 「알 수 없는 앱」 설치 허용 (최초 1회)
+### 3-2. Play Protect 차단 해제 (설치 실패 시 먼저)
 
-APK를 여는 앱(카카오톡·내 파일·Chrome 등)마다 **한 번씩** 허용해야 합니다.
+「Google Play 프로텍트가 기기 보호를 위해 앱을 차단했습니다」가 나오면 아래를 **설치 전에** 진행하세요.
+
+**방법 A — Play Protect 검사 끄기**
+
+1. **Google Play 스토어** 앱 실행
+2. 오른쪽 위 **프로필** → **Play 프로텍트**
+3. 오른쪽 위 **⚙ 설정**
+4. **Play 프로텍트로 앱 검사** → **끔**
+
+**방법 B — 삼성 갤럭시 Auto Blocker (One UI 6 이상)**
+
+1. **설정** → **보안 및 개인정보 보호** → **Auto Blocker**
+2. **승인되지 않은 출처의 앱 설치 차단** → **끔**
+
+설치 완료 후 다시 켜도 됩니다.
+
+### 3-3. 「알 수 없는 앱」 설치 허용 (최초 1회)
 
 **One UI 6 / 7 (Android 14~15) 기준**
 
 1. **설정** → **애플리케이션** (또는 **앱**)
-2. 우측 상단 **⋮** → **특수 액세스** (또는 **특별한 접근**)
-3. **알 수 없는 앱 설치**
-4. APK를 열 **앱**(예: **카카오톡**, **내 파일**, **Chrome**) 선택
-5. **이 출처 허용** 켜기
+2. 우측 상단 **⋮** → **특수 액세스** → **알 수 없는 앱 설치**
+3. APK를 열 **앱**(예: **내 파일**, **카카오톡**, **Chrome**) 선택
+4. **이 출처 허용** 켜기
 
 **경로가 다른 경우:** **설정** → **보안 및 개인정보 보호** → **더 많은 보안 설정** → **알 수 없는 앱 설치**
 
-### 3-3. APK 설치
+### 3-4. APK 설치
 
 1. **내 파일** → **다운로드** → APK 파일 탭
-2. **설치** → **Google Play 프로텍트** 경고 시 **자세히** → **그래도 설치**
+2. **설치** → Play 프로텍트 경고 시 **자세히** → **그래도 설치**
 3. **설치 완료** → **열기**
 
-등록 APK는 미리보기 APK 위에 **덮어쓰기 설치**하면 됩니다.
-
-### 3-4. PC + USB (판매자용)
+### 3-5. PC + USB (판매자·개발자용)
 
 ```bash
-adb install dist/ktx-tget-preview.apk
-adb install -r dist/ktx-tget-a1b2c3d4e5f67890.apk
+adb install dist/ktx-tget-release.apk
 ```
 
 ---
 
 ## 4. 설치 후 필수 설정 (갤럭시)
 
-**등록 APK** 설치 후에 진행합니다. 미리보기 APK 단계에서는 필요 없습니다.
+### 4-1. 접근성 서비스 (필수 — 이걸 안 켜면 매크로가 동작하지 않음)
 
-### 4-1. 접근성 서비스 (필수)
+APK로 설치한 앱은 처음에 접근성 토글이 **꺼져 있고** 「제한된 설정으로 제어됨」으로 보일 수 있습니다.
 
-1. ktx-tget 앱 → **접근성 설정 열기**  
-   또는 **설정** → **접근성** → **설치된 앱** → **ktx-tget** → **사용** 켜기
+**① 제한된 설정 허용 (먼저)**
+
+1. **설정** → **애플리케이션** → **ktx-tget**
+2. 오른쪽 위 **⋮** → **제한된 설정 허용**
+3. 잠금 화면 확인이 나오면 통과
+
+**② 접근성 켜기**
+
+1. **설정** → **접근성** → **설치된 앱** → **ktx-tget**
+2. **ktx-tget 사용** 스위치 **켜기** → 경고 창 → **허용**
+
+또는 ktx-tget 앱 → **시작하기** → **접근성 설정 열기**
+
+**③ 확인**
+
+- 접근성 화면에서 ktx-tget이 **사용** 상태여야 합니다.
+- 「제한된 설정으로 제어됨」 문구가 **사라져야** 합니다.
 
 ### 4-2. 알림 (필수, Android 13+)
 
@@ -156,10 +188,10 @@ adb install -r dist/ktx-tget-a1b2c3d4e5f67890.apk
 - **설정** → **앱** → **ktx-tget** → **알림** → **예매 강한/기본 알림** 켜기
 - **강함** 모드: **전체 화면 알림** 허용 (Android 14+: **설정** → **앱** → **특수 액세스** → **전체 화면 알림**)
 
-### 4-3. 알람·배터리 (권장)
+### 4-3. 배터리 (권장 — 밤새 매크로가 끊기면)
 
-- **설정** → **소리 및 진동** → **알람** 볼륨 올리기
-- **설정** → **배터리** → ktx-tget을 **절대 절전 안 함** (선택)
+- **설정** → **배터리** → **백그라운드 사용 제한**
+- ktx-tget → **절대 절전 안 함**
 
 ### 4-4. 코레일톡
 
@@ -167,55 +199,59 @@ adb install -r dist/ktx-tget-a1b2c3d4e5f67890.apk
 
 ---
 
-## 5. 판매자·구매자 전체 흐름
+## 5. 사용 시작
+
+1. 코레일톡에서 열차 목록 화면을 연 뒤, 원하는 출발 시각이 목록 맨 위에 오도록 맞춰 둡니다.
+2. ktx-tget 앱에서 매크로 실행 켜기, 제외 열차·알림 등 옵션 설정
+3. 코레일톡 열차 목록 화면으로 돌아가 두면 자동으로 새로고침을 반복합니다.
+4. 예매 화면에 도달하면 알림이 옵니다. 그때부터 직접 결제하면 됩니다.
+
+---
+
+## 6. 판매자·구매자 전체 흐름 요약
 
 ### 판매자
 
-1. `./scripts/build_preview_apk.sh` → `ktx-tget-preview.apk` 전송
-2. 구매자가 **기기 ID** 전달
-3. `./scripts/build_customer_apk.sh <기기ID>` → 등록 APK 전송
-4. (선택) §4 설정 안내·셋업 지원
+1. `local.properties`에 `licenseSecret` 설정 (최초 1회)
+2. `./scripts/build_preview_apk.sh` → `dist/ktx-tget-release.apk` 전송
+3. 구매자가 보낸 **기기 ID** 받기
+4. `./scripts/generate_key.sh <기기ID>` → **라이선스 키** 전달
 
 ### 구매자
 
-1. **미리보기 APK** 설치 → 앱에서 **ID 복사** → 판매자에게 전송
-2. **등록 APK** 받아 **덮어쓰기 설치**
-3. §4 접근성·알림 설정
-4. 매크로 옵션 설정 후 사용
+1. APK 설치 (§3)
+2. 앱 실행 → **기기 ID 복사** → 판매자에게 전송
+3. 판매자가 보낸 **라이선스 키** 입력 → **활성화**
+4. 접근성·알림 설정 (§4)
+5. 매크로 옵션 설정 후 사용
 
 ---
 
-## 6. 구매자에게 보낼 안내 (복사용)
+## 7. 업데이트
 
-**IT 지식이 없는 구매자**에게는 **[buyer_setup_guide.md](./buyer_setup_guide.md)** 전체(또는 링크)를 보내는 것을 권장합니다.  
-이메일로 미리보기 APK를 보낸 **직후**부터 단계별로 적혀 있습니다.
+APK를 새 버전으로 교체할 때는 같은 서명으로 빌드한 APK를 **덮어쓰기 설치**합니다. 라이선스 키는 SharedPreferences에 저장되므로 재입력 불필요.
 
-짧게 안내할 때 예시:
-
-> **ktx-tget 설치 안내**
->
-> Android ID는 휴대폰 설정에서 바로 볼 수 없어, **2단계**로 설치합니다.
->
-> **【1단계 — 기기 ID 확인】**
-> 1. 첨부한 `ktx-tget-preview.apk` 설치 (§3 설치 방법)
-> 2. 앱 실행 → **「기기 ID 확인 (미리보기)」** → **ID 복사**
-> 3. 복사한 ID를 이 메일에 **답장**으로 보내주세요  
->    (이때는 매크로가 안 되는 게 정상입니다)
->
-> **【2단계 — 등록 APK】**
-> 4. ID 확인 후 **전용 APK** 를 이메일로 보내드립니다
-> 5. 같은 방법으로 **덮어쓰기 설치**
-> 6. **설정 → 접근성 → ktx-tget** 켜기, **알림 허용**
->
-> ⚠️ 설정의 **일련번호·IMEI** 가 아닙니다. **앱에 표시된 기기 ID** 를 보내주세요.
->
-> 자세한 그림 없는 단계별 안내: `docs/buyer_setup_guide.md`
+```bash
+adb install -r dist/ktx-tget-release.apk
+```
 
 ---
 
-## 7. 참고: adb로 기기 ID 확인 (판매자·개발자)
+## 8. Release keystore (장기 배포)
 
-미리보기 APK 없이 확인할 때 (USB + 개발자 옵션 필요):
+debug 서명 fallback 대신 전용 keystore를 생성하면 서명이 안정적으로 유지됩니다.
+
+```bash
+keytool -genkey -v -keystore ktxtget-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias ktxtget
+```
+
+`app/build.gradle.kts`의 `signingConfigs`에 keystore 경로와 비밀번호를 추가하세요.
+
+---
+
+## 9. 참고: adb로 기기 ID 확인 (판매자·개발자)
+
+앱 없이 확인할 때 (USB + 개발자 옵션 필요):
 
 ```bash
 adb shell settings get secure android_id
@@ -225,31 +261,11 @@ adb shell settings get secure android_id
 
 ---
 
-## 8. Release keystore (장기 배포)
-
-```bash
-keytool -genkey -v -keystore ktxtget-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias ktxtget
-```
-
-현재는 keystore 없이 `build_preview_apk.sh` / `build_customer_apk.sh` 로 Release APK를 만들 수 있습니다 (debug 서명 fallback).
-
----
-
-## 9. 업데이트
-
-같은 기기 ID·같은 서명으로 빌드한 APK는 **덮어쓰기 설치** 가능:
-
-```bash
-adb install -r dist/ktx-tget-<기기ID>.apk
-```
-
----
-
 ## 요약
 
 | 단계 | 담당 | 내용 |
 |------|------|------|
-| 1 | 판매자 | `build_preview_apk.sh` → 미리보기 APK 전송 |
-| 2 | 구매자 | 설치 → 앱에서 **ID 복사** → 전달 |
-| 3 | 판매자 | `build_customer_apk.sh <id>` → 등록 APK 전송 |
-| 4 | 구매자 | 덮어쓰기 설치 → 접근성·알림 설정 |
+| 1 | 판매자 | `build_preview_apk.sh` → APK 전송 (모든 구매자 동일) |
+| 2 | 구매자 | APK 설치 → 앱에서 **기기 ID 복사** → 전달 |
+| 3 | 판매자 | `generate_key.sh <기기ID>` → **라이선스 키** 전달 |
+| 4 | 구매자 | 앱에서 라이선스 키 입력 → 접근성·알림 설정 |

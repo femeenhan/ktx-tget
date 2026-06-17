@@ -1,6 +1,7 @@
 ## Android SDK path (Android Studio default shown)
 sdk.dir=/path/to/Android/sdk
 
-## Optional: lock debug/release builds to your test device (ANDROID_ID).
-## Leave empty for unrestricted debug builds.
-# allowedDeviceId=
+## License secret used to generate and verify buyer license keys.
+## Keep this value private — do not commit to git.
+## Must match the value used in generate_key.sh.
+# licenseSecret=your_secret_here

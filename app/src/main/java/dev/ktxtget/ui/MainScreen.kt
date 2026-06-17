@@ -125,11 +125,9 @@ fun MainScreen(repository: MacroPreferencesRepository) {
     BackHandler(enabled = isExcludedTrainsFieldFocused) {
         dismissKeyboard()
     }
-    val registrationState: DeviceRegistrationState =
-        remember { DeviceLicense.getRegistrationState(context) }
-    val isMacroAllowed: Boolean = remember(registrationState) {
-        DeviceLicense.isLicensed(context)
-    }
+    var registrationState by remember { mutableStateOf(DeviceLicense.getRegistrationState(context)) }
+    val isMacroAllowed = registrationState == DeviceRegistrationState.LICENSED ||
+        registrationState == DeviceRegistrationState.DEV_OPEN
     val deviceId: String = remember { DeviceLicense.readDeviceId(context) }
     LaunchedEffect(isMacroAllowed, macroEnabled) {
         if (!isMacroAllowed && macroEnabled) {
@@ -161,14 +159,26 @@ fun MainScreen(repository: MacroPreferencesRepository) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         HomeHeader()
-        if (registrationState == DeviceRegistrationState.PREVIEW ||
-            registrationState == DeviceRegistrationState.WRONG_DEVICE
-        ) {
-            DeviceRegistrationCard(
-                registrationState = registrationState,
+        if (registrationState == DeviceRegistrationState.UNLICENSED) {
+            LicenseActivationCard(
                 deviceId = deviceId,
-                onCopyDeviceId = {
-                    copyDeviceIdToClipboard(context, deviceId)
+                onCopyDeviceId = { copyDeviceIdToClipboard(context, deviceId) },
+                onActivate = { inputKey ->
+                    if (DeviceLicense.verifyLicenseKey(deviceId, inputKey)) {
+                        DeviceLicense.saveLicenseKey(context, inputKey)
+                        registrationState = DeviceLicense.getRegistrationState(context)
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.license_activation_success_toast),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.license_activation_failed_toast),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 },
             )
         }
@@ -179,7 +189,7 @@ fun MainScreen(repository: MacroPreferencesRepository) {
                 if (!isMacroAllowed) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.device_registration_macro_blocked),
+                        context.getString(R.string.license_macro_blocked),
                         Toast.LENGTH_SHORT,
                     ).show()
                     return@MacroStatusCard
@@ -689,25 +699,12 @@ private fun SettingRadioRow(
 }
 
 @Composable
-private fun DeviceRegistrationCard(
-    registrationState: DeviceRegistrationState,
+private fun LicenseActivationCard(
     deviceId: String,
     onCopyDeviceId: () -> Unit,
+    onActivate: (String) -> Unit,
 ) {
-    val titleResId: Int = when (registrationState) {
-        DeviceRegistrationState.PREVIEW -> R.string.device_registration_preview_title
-        DeviceRegistrationState.WRONG_DEVICE -> R.string.device_registration_wrong_device_title
-        DeviceRegistrationState.LICENSED,
-        DeviceRegistrationState.DEV_OPEN,
-        -> R.string.device_registration_preview_title
-    }
-    val bodyResId: Int = when (registrationState) {
-        DeviceRegistrationState.PREVIEW -> R.string.device_registration_preview_body
-        DeviceRegistrationState.WRONG_DEVICE -> R.string.device_registration_wrong_device_body
-        DeviceRegistrationState.LICENSED,
-        DeviceRegistrationState.DEV_OPEN,
-        -> R.string.device_registration_preview_body
-    }
+    var licenseKeyInput by remember { mutableStateOf("") }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -717,20 +714,20 @@ private fun DeviceRegistrationCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                text = stringResource(titleResId),
+                text = stringResource(R.string.license_activation_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(bodyResId),
+                text = stringResource(R.string.license_activation_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = stringResource(R.string.device_registration_device_id_label),
+                text = stringResource(R.string.license_device_id_label),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -741,27 +738,42 @@ private fun DeviceRegistrationCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
                 onClick = onCopyDeviceId,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.device_registration_copy_button))
+                Text(stringResource(R.string.license_device_id_copy_button))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = licenseKeyInput,
+                onValueChange = { licenseKeyInput = it },
+                label = { Text(stringResource(R.string.license_key_hint)) },
+                placeholder = { Text("XXXX-XXXX-XXXX-XXXX") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onActivate(licenseKeyInput) }),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { onActivate(licenseKeyInput) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.license_activate_button))
             }
         }
     }
 }
 
 private fun copyDeviceIdToClipboard(context: Context, deviceId: String) {
-    if (deviceId.isEmpty()) {
-        return
-    }
-    val clipboard: ClipboardManager? =
-        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
+    if (deviceId.isEmpty()) return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
     clipboard?.setPrimaryClip(ClipData.newPlainText("device_id", deviceId))
     Toast.makeText(
         context,
-        context.getString(R.string.device_registration_copied_toast),
+        context.getString(R.string.license_device_id_copied_toast),
         Toast.LENGTH_SHORT,
     ).show()
 }

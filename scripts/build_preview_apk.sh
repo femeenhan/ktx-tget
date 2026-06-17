@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Build a preview APK (no device ID) so buyers can read and copy their Android ID.
+# Build the universal release APK (single APK for all buyers).
+# Buyers activate with a license key inside the app — no per-device build needed.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${ROOT}/dist"
-OUTPUT_NAME="ktx-tget-preview.apk"
+OUTPUT_NAME="ktx-tget-release.apk"
+
+if ! grep -q "^licenseSecret=" "${ROOT}/local.properties" 2>/dev/null; then
+  echo "Warning: licenseSecret not set in local.properties — using default secret." >&2
+  echo "Add 'licenseSecret=your_secret_here' to local.properties before distributing." >&2
+fi
 
 cd "${ROOT}"
 mkdir -p "${DIST_DIR}"
 
-echo ">> gradlew assembleRelease (preview, no allowedDeviceId)"
-./gradlew assembleRelease -PallowedDeviceId=
+echo ">> gradlew assembleRelease"
+./gradlew assembleRelease
 
 APK_SRC="${ROOT}/app/build/outputs/apk/release/app-release-unsigned.apk"
 if [[ ! -f "${APK_SRC}" ]]; then
@@ -25,8 +31,7 @@ fi
 cp "${APK_SRC}" "${DIST_DIR}/${OUTPUT_NAME}"
 ZIP_PATH="$("${SCRIPT_DIR}/package_apk_for_share.sh" "${DIST_DIR}/${OUTPUT_NAME}")"
 echo ">> Wrote ${DIST_DIR}/${OUTPUT_NAME}"
-echo ">> Wrote ${ZIP_PATH} (send this file on KakaoTalk; .apk direct send is blocked)"
-echo ">> Or upload ${DIST_DIR}/${OUTPUT_NAME} to Google Drive and share the link."
-echo ">> Gmail APK attachments are often blocked too."
-echo ">> Buyers may need to turn OFF Play Protect scanning before install (see docs/buyer_setup_guide.md §1-2)."
-echo ">> Send this APK so the buyer can install it, copy their device ID, and send it back."
+echo ">> Wrote ${ZIP_PATH} (send this ZIP on KakaoTalk; .apk direct send is blocked)"
+echo ""
+echo "This is the ONLY APK you need to distribute to all buyers."
+echo "To generate a license key for a buyer: ./scripts/generate_key.sh <device_id>"

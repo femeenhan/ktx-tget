@@ -3,60 +3,64 @@ package dev.ktxtget.util
 import android.content.Context
 import android.provider.Settings
 import dev.ktxtget.BuildConfig
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 enum class DeviceRegistrationState {
     LICENSED,
-    PREVIEW,
+    UNLICENSED,
     DEV_OPEN,
-    WRONG_DEVICE,
 }
 
 object DeviceLicense {
+    private const val PREFS_NAME = "ktxtget_license"
+    private const val KEY_LICENSE = "license_key"
+
     fun readDeviceId(context: Context): String {
-        val rawId: String? =
-            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return normalizeDeviceId(rawId ?: "")
+        val rawId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        return (rawId ?: "").trim().lowercase()
     }
 
-    fun buildAllowedDeviceId(): String {
-        return normalizeDeviceId(BuildConfig.ALLOWED_DEVICE_ID)
+    internal fun generateLicenseKey(deviceId: String, secret: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        val hash = mac.doFinal(deviceId.trim().lowercase().toByteArray(Charsets.UTF_8))
+        return hash.take(8).joinToString("") { "%02X".format(it) }
+            .chunked(4).joinToString("-")
     }
+
+    fun generateLicenseKey(deviceId: String): String =
+        generateLicenseKey(deviceId, BuildConfig.LICENSE_SECRET)
+
+    fun verifyLicenseKey(deviceId: String, inputKey: String): Boolean {
+        if (deviceId.isEmpty() || inputKey.isEmpty()) return false
+        val expected = generateLicenseKey(deviceId).replace("-", "")
+        val normalized = inputKey.trim().uppercase().replace("-", "")
+        return expected == normalized
+    }
+
+    fun saveLicenseKey(context: Context, key: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_LICENSE, key.trim().uppercase()).apply()
+    }
+
+    fun getSavedLicenseKey(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_LICENSE, null)
 
     fun getRegistrationState(context: Context): DeviceRegistrationState {
-        val allowedDeviceId: String = buildAllowedDeviceId()
-        if (allowedDeviceId.isEmpty()) {
-            return if (BuildConfig.DEBUG) {
-                DeviceRegistrationState.DEV_OPEN
-            } else {
-                DeviceRegistrationState.PREVIEW
-            }
-        }
-        val currentDeviceId: String = readDeviceId(context)
-        if (currentDeviceId.isEmpty()) {
-            return DeviceRegistrationState.WRONG_DEVICE
-        }
-        return if (deviceIdsMatch(allowedDeviceId, currentDeviceId)) {
+        if (BuildConfig.DEBUG) return DeviceRegistrationState.DEV_OPEN
+        val deviceId = readDeviceId(context)
+        val savedKey = getSavedLicenseKey(context) ?: return DeviceRegistrationState.UNLICENSED
+        return if (verifyLicenseKey(deviceId, savedKey)) {
             DeviceRegistrationState.LICENSED
         } else {
-            DeviceRegistrationState.WRONG_DEVICE
+            DeviceRegistrationState.UNLICENSED
         }
     }
 
     fun isLicensed(context: Context): Boolean {
-        return getRegistrationState(context) == DeviceRegistrationState.LICENSED ||
-            getRegistrationState(context) == DeviceRegistrationState.DEV_OPEN
-    }
-
-    fun normalizeDeviceId(rawId: String): String {
-        return rawId.trim().lowercase()
-    }
-
-    fun deviceIdsMatch(allowedDeviceId: String, currentDeviceId: String): Boolean {
-        val allowed: String = normalizeDeviceId(allowedDeviceId)
-        val current: String = normalizeDeviceId(currentDeviceId)
-        if (allowed.isEmpty() || current.isEmpty()) {
-            return false
-        }
-        return allowed == current
+        val state = getRegistrationState(context)
+        return state == DeviceRegistrationState.LICENSED || state == DeviceRegistrationState.DEV_OPEN
     }
 }
