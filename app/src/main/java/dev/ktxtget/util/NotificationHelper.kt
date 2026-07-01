@@ -209,6 +209,9 @@ object NotificationHelper {
         val pendingFlags: Int = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val contentIntent: PendingIntent =
             PendingIntent.getActivity(context, 0, launchIntent, pendingFlags)
+        val stopIntent: Intent = Intent(context, StopTicketAlertReceiver::class.java)
+        val stopPendingIntent: PendingIntent =
+            PendingIntent.getBroadcast(context, 2, stopIntent, pendingFlags)
         val builder: NotificationCompat.Builder =
             NotificationCompat.Builder(context, channelId)
                 .setContentTitle(context.getString(R.string.notification_ticket_alert_title))
@@ -223,6 +226,11 @@ object NotificationHelper {
                 .setSound(soundUri)
                 .setVibrate(vibrationPattern)
                 .setDefaults(0)
+                .addAction(
+                    android.R.drawable.ic_menu_close_clear_cancel,
+                    context.getString(R.string.notification_ticket_alert_stop_action),
+                    stopPendingIntent,
+                )
         if (useFullScreenIntent) {
             val fullScreenIntent: PendingIntent =
                 PendingIntent.getActivity(context, 1, launchIntent, pendingFlags)

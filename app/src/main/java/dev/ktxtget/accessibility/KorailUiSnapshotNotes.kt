@@ -35,6 +35,12 @@ object KorailUiSnapshotNotes {
     )
     /** Primary action on the intermediate-stop notice dialog. */
     const val INTERMEDIATE_STOP_CONFIRM_LABEL: String = "확인"
+    /**
+     * Primary action on any post-reserve notice dialog (e.g. 「이용안내」 연접 좌석 재배정 안내) that can appear
+     * layered on top of the 승차권 정보 확인 screen and hide [TICKET_CONFIRMATION_TITLE]. Matched by label only
+     * (not body text) — see [dev.ktxtget.service.KtxAccessibilityService.isAwaitingPostReserveConfirmation].
+     */
+    const val TICKET_CONFIRMATION_NOTICE_CONFIRM_LABEL: String = "확인"
     /** Bottom sheet primary action label (Phase 2 tap target). */
     const val RESERVE_BUTTON_LABEL: String = "예매"
     /** Cell label before a seat opens (sold out). */

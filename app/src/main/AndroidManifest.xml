@@ -32,6 +32,9 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="@string/special_use_fgs_macro_subtype" />
         </service>
+        <receiver
+            android:name=".util.StopTicketAlertReceiver"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

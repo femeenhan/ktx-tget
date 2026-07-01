@@ -18,6 +18,7 @@
     <string name="notification_channel_ticket_alert_normal_desc">승차권 정보 확인 화면 도달 시 알림·짧은 소리·진동</string>
     <string name="notification_ticket_alert_title">🚆 예매 화면 도달!</string>
     <string name="notification_ticket_alert_text">승차권 정보 확인 화면입니다. 지금 바로 결제를 완료하세요.</string>
+    <string name="notification_ticket_alert_stop_action">알림 중지</string>
     <string name="nav_main">홈</string>
     <string name="nav_log">로그</string>
     <string name="main_screen_title">KTX 취소표 매크로</string>

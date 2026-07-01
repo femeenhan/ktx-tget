@@ -50,6 +50,15 @@ class KtxAccessibilityService : AccessibilityService() {
     @Volatile
     private var lastReserveAssistUptimeMs: Long = 0L
 
+    /**
+     * Uptime deadline (via [SystemClock.uptimeMillis]) until which any unrecognized dialog with a
+     * 「확인」 button should be auto-dismissed, regardless of its body text. Set once a reserve tap
+     * succeeds — from that point the booking is already committed, so any popup blocking the
+     * 승차권 정보 확인 title (known or not) is assumed informational and safe to close. 0L means inactive.
+     */
+    @Volatile
+    private var postReserveGenericConfirmDeadlineUptimeMs: Long = 0L
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "KtxAccessibilityService connected")
@@ -123,6 +132,9 @@ class KtxAccessibilityService : AccessibilityService() {
                     handleTicketConfirmationDetected("event")
                     return@launch
                 }
+                if (tryAutoConfirmTicketConfirmationNoticeDialog(root)) {
+                    return@launch
+                }
                 if (!repository.readMacroEnabled()) {
                     return@launch
                 }
@@ -192,6 +204,9 @@ class KtxAccessibilityService : AccessibilityService() {
                 handleTicketConfirmationDetected("cycle_pre_refresh")
                 return
             }
+            if (tryAutoConfirmTicketConfirmationNoticeDialog(root)) {
+                return
+            }
             if (dismissIntermediateStopDialogIfRequested(settings, root)) {
                 return
             }
@@ -221,6 +236,9 @@ class KtxAccessibilityService : AccessibilityService() {
                 handleTicketConfirmationDetected("cycle_post_refresh")
                 return
             }
+            if (tryAutoConfirmTicketConfirmationNoticeDialog(postRefreshGateRoot)) {
+                return
+            }
             if (dismissIntermediateStopDialogIfRequested(settings, postRefreshGateRoot)) {
                 return
             }
@@ -242,6 +260,9 @@ class KtxAccessibilityService : AccessibilityService() {
             }
             if (hasTicketConfirmation(snapshotForClicks)) {
                 handleTicketConfirmationDetected("cycle_snapshot")
+                return
+            }
+            if (tryAutoConfirmTicketConfirmationNoticeDialog(snapshotForClicks)) {
                 return
             }
             if (dismissIntermediateStopDialogIfRequested(settings, snapshotForClicks)) {
@@ -268,6 +289,9 @@ class KtxAccessibilityService : AccessibilityService() {
                     }
                     if (hasTicketConfirmation(freshClickRoot)) {
                         handleTicketConfirmationDetected("cycle_price_click")
+                        return
+                    }
+                    if (tryAutoConfirmTicketConfirmationNoticeDialog(freshClickRoot)) {
                         return
                     }
                     if (dismissIntermediateStopDialogIfRequested(settings, freshClickRoot)) {
@@ -313,6 +337,7 @@ class KtxAccessibilityService : AccessibilityService() {
         val settings: MacroSettings = repository.readMacroSettings()
         NotificationHelper.triggerUserAlert(applicationContext, settings.ticketAlertMode)
         waitingForReserve = false
+        postReserveGenericConfirmDeadlineUptimeMs = 0L
         repository.setMacroEnabled(false)
         runtimeLog("ticket", "승차권 정보 확인 ($source) — 매크로 중지")
         Log.i(TAG, "Ticket confirmation handled ($source)")
@@ -336,6 +361,9 @@ class KtxAccessibilityService : AccessibilityService() {
                     handleTicketConfirmationDetected("reserve_tap")
                     return@withLock true
                 }
+                if (tryAutoConfirmTicketConfirmationNoticeDialog(tapRoot)) {
+                    return@withLock false
+                }
                 if (dismissIntermediateStopDialogIfRequested(settings, tapRoot)) {
                     return@withLock false
                 }
@@ -346,6 +374,8 @@ class KtxAccessibilityService : AccessibilityService() {
                 val ok: Boolean = performClick(target)
                 if (ok) {
                     waitingForReserve = false
+                    postReserveGenericConfirmDeadlineUptimeMs =
+                        SystemClock.uptimeMillis() + POST_RESERVE_GENERIC_CONFIRM_BUDGET_MS
                     Log.i(TAG, "Clicked reserve")
                     runtimeLog("reserve", "예매 버튼 탭 (바텀시트)")
                 }
@@ -527,6 +557,49 @@ class KtxAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * True only in the window between a successful reserve tap and [handleTicketConfirmationDetected]
+     * (or its timeout). Booking is already committed in this window, so any dialog blocking the
+     * 승차권 정보 확인 title — known wording or not — is assumed informational and safe to auto-dismiss.
+     */
+    private fun isAwaitingPostReserveConfirmation(): Boolean {
+        val deadline: Long = postReserveGenericConfirmDeadlineUptimeMs
+        if (deadline == 0L) {
+            return false
+        }
+        if (SystemClock.uptimeMillis() >= deadline) {
+            postReserveGenericConfirmDeadlineUptimeMs = 0L
+            return false
+        }
+        return true
+    }
+
+    /**
+     * Unlike the intermediate-stop dialog, any post-reserve notice (e.g. 이용안내 / 연접 좌석 재배정 안내)
+     * can appear layered on top of the 승차권 정보 확인 screen and hide its title, so it must be checked
+     * (and dismissed) even when [hasTicketConfirmation] is currently false for the active root. Body
+     * text is not matched here — see [isAwaitingPostReserveConfirmation] for why any 확인 button found
+     * in this window is safe to tap.
+     */
+    private suspend fun tryAutoConfirmTicketConfirmationNoticeDialog(root: AccessibilityNodeInfo): Boolean {
+        if (!isAwaitingPostReserveConfirmation()) {
+            return false
+        }
+        val target: AccessibilityNodeInfo =
+            NodeFinder.findClickableByLabel(root, KorailUiSnapshotNotes.TICKET_CONFIRMATION_NOTICE_CONFIRM_LABEL)
+                ?: return false
+        try {
+            val ok: Boolean = performClick(target)
+            if (ok) {
+                runtimeLog("dialog", "예매 후 안내 팝업 확인 자동 탭")
+                Log.i(TAG, "Auto-confirmed post-reserve notice dialog")
+            }
+            return ok
+        } finally {
+            recycleAccessibilityNode(target)
+        }
+    }
+
     private fun recycleNodes(nodes: List<AccessibilityNodeInfo>) {
         val size: Int = nodes.size
         for (i in 0 until size) {
@@ -566,5 +639,6 @@ class KtxAccessibilityService : AccessibilityService() {
         private const val RESERVE_POLL_GAP_SLOW_MS: Long = 160L
         private const val RESERVE_EVENT_ASSIST_MIN_GAP_MS: Long = 85L
         private const val INTERMEDIATE_STOP_DIALOG_MAX_PARENT_HOPS: Int = 12
+        private const val POST_RESERVE_GENERIC_CONFIRM_BUDGET_MS: Long = 15_000L
     }
 }
