@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  canTakeScreenshot: 코레일톡 7.x 열차 목록은 행 텍스트를 접근성 트리에 노출하지 않아
+  화면 캡처로 매진 여부를 읽는다 (dev.ktxtget.sensing.ScreenshotTrainListSensor).
+  API 30부터 있는 속성이고 그 미만에서는 무시된다. 코드도 SDK_INT로 막아 두었으므로
+  minSdk 26과 함께 두어도 안전하다 — UnusedAttribute 경고를 끈 이유.
+
+  flagIncludeNotImportantViews: 목록 행처럼 접근성상 "중요하지 않음"으로 표시된 노드까지 받는다.
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:packageNames="com.korail.talk,kr.co.korail.mobile" />
+    android:packageNames="com.korail.talk,kr.co.korail.mobile"
+    tools:ignore="UnusedAttribute" />

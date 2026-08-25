@@ -6,20 +6,26 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import dev.ktxtget.accessibility.BookingSheetReader
 import dev.ktxtget.accessibility.KorailUiSnapshotNotes
-import dev.ktxtget.accessibility.ParsedTrainRow
-import dev.ktxtget.accessibility.TrainRowTreeParser
+import dev.ktxtget.accessibility.TrainRowLocator
 import dev.ktxtget.data.MacroPreferencesRepository
+import dev.ktxtget.domain.BookingSheet
+import dev.ktxtget.domain.KorailLabels
 import dev.ktxtget.domain.MacroFilterEngine
-import dev.ktxtget.domain.PreviousRowCells
-import dev.ktxtget.domain.PriceTransitionDetector
-import dev.ktxtget.domain.SeatColumn
 import dev.ktxtget.domain.MacroSettings
-import dev.ktxtget.domain.TrainRow
+import dev.ktxtget.domain.PixelRect
+import dev.ktxtget.domain.SeatOpening
+import dev.ktxtget.domain.SoldOutSignal
+import dev.ktxtget.domain.SoldOutTransitionTracker
 import dev.ktxtget.runtime.MacroRuntimeLog
-import dev.ktxtget.util.NodeFinder
+import dev.ktxtget.sensing.ScreenshotTrainListSensor
+import dev.ktxtget.sensing.TrainListSensor
+import dev.ktxtget.util.AccessibilityTreeDump
 import dev.ktxtget.util.DeviceLicense
+import dev.ktxtget.util.NodeFinder
 import dev.ktxtget.util.NotificationHelper
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,55 +37,83 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * 매크로 본체.
+ *
+ * ## 동작 흐름 (코레일톡 7.x 기준)
+ * 1. 앱바의 **새로고침**을 주기적으로 탭한다.
+ * 2. 화면을 캡처해 각 행의 좌석 칸이 **매진인지**만 픽셀로 판정한다.
+ *    목록 행이 접근성 트리에 텍스트를 전혀 노출하지 않아 이 방법을 쓴다 —
+ *    [KorailUiSnapshotNotes] 주석 참고.
+ * 3. 「매진 → 매진 아님」 전이가 잡히면 그 행을 탭해 **바텀시트**를 연다.
+ * 4. 시트는 텍스트가 정상 노출되므로, 여기서 열차번호·좌석 종류를 읽어 2차 필터를 적용한다.
+ *    걸리면 뒤로 나오고, 통과하면 등급 탭을 맞춘 뒤 **「바로 예매」** 를 탭한다.
+ * 5. 「승차권 정보 확인」 화면에 닿으면 알림을 띄우고 매크로를 멈춘다. 결제는 사용자가 한다.
+ *
+ * 픽셀 판정은 매진 여부까지만 구분하므로 3번은 "뭔가 풀렸다"는 신호일 뿐이고,
+ * **살지 말지는 전부 4번에서 시트 텍스트로 결정한다.**
+ *
+ * AccessibilityNodeInfo.recycle()은 더 이상 필요하지 않아(API 33부터 no-op, 이하에서도 GC 대상)
+ * 이 클래스는 노드를 재활용하지 않는다.
+ */
 class KtxAccessibilityService : AccessibilityService() {
+
     private val repository: MacroPreferencesRepository by lazy {
         MacroPreferencesRepository(applicationContext)
     }
-    private val parser: TrainRowTreeParser = TrainRowTreeParser()
+    private val sensor: TrainListSensor by lazy { ScreenshotTrainListSensor(this) }
+    private val tracker: SoldOutTransitionTracker = SoldOutTransitionTracker()
     private val serviceJob: Job = SupervisorJob()
     private val scope: CoroutineScope = CoroutineScope(serviceJob + Dispatchers.Default)
     private var macroLoopJob: Job? = null
-    private val previousCells: MutableMap<String, PreviousRowCells> = mutableMapOf()
 
-    @Volatile
-    private var waitingForReserve: Boolean = false
     private val ticketConfirmationHandled: AtomicBoolean = AtomicBoolean(false)
-    private val reserveInteractionMutex: Mutex = Mutex()
-    @Volatile
-    private var lastReserveAssistUptimeMs: Long = 0L
+
+    /** 트리 덤프는 진단용이라 세션당 한 번만 남긴다. */
+    private val dumpedTreeOnce: AtomicBoolean = AtomicBoolean(false)
+
+    /** 새로고침조차 못 한 연속 주기 수. 코레일 팝업이 화면을 덮고 있을 때 늘어난다. */
+    private var blockedCycles: Int = 0
+    private val bookingMutex: Mutex = Mutex()
 
     /**
-     * Uptime deadline (via [SystemClock.uptimeMillis]) until which any unrecognized dialog with a
-     * 「확인」 button should be auto-dismissed, regardless of its body text. Set once a reserve tap
-     * succeeds — from that point the booking is already committed, so any popup blocking the
-     * 승차권 정보 확인 title (known or not) is assumed informational and safe to close. 0L means inactive.
+     * 예매 탭이 성공한 뒤 이 시각까지는, 「승차권 정보 확인」을 가리는 안내 팝업의 「확인」을
+     * 본문과 무관하게 눌러 준다. 이미 예매가 진행된 뒤라 남은 팝업은 안내성으로 본다. 0이면 비활성.
      */
     @Volatile
-    private var postReserveGenericConfirmDeadlineUptimeMs: Long = 0L
+    private var postReserveConfirmDeadlineUptimeMs: Long = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "KtxAccessibilityService connected")
         runtimeLog("service", "접근성 서비스 연결됨")
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            runtimeLog("error", "안드로이드 11 미만에서는 화면 판독을 쓸 수 없습니다")
+        }
+        // onServiceConnected는 같은 인스턴스에서 여러 번 불릴 수 있다(실기에서 3분에 5회 관측).
+        // 그때마다 루프를 새로 띄우면 루프가 겹쳐 새로고침과 화면 캡처가 배수로 늘어난다.
+        macroLoopJob?.cancel()
         macroLoopJob = scope.launch {
-            var prevMacroEnabled: Boolean = false
+            var previouslyEnabled = false
             while (isActive) {
                 try {
-                    val enabledNow: Boolean = repository.readMacroEnabled()
-                    if (enabledNow && !prevMacroEnabled) {
+                    val enabled: Boolean = repository.readMacroEnabled()
+                    if (enabled && !previouslyEnabled) {
                         ticketConfirmationHandled.set(false)
+                        tracker.reset()
+                        dumpedTreeOnce.set(false)
+                        blockedCycles = 0
                     }
-                    prevMacroEnabled = enabledNow
+                    previouslyEnabled = enabled
                     if (!DeviceLicense.isLicensed(applicationContext)) {
-                        if (enabledNow) {
+                        if (enabled) {
                             repository.setMacroEnabled(false)
                         }
                         delay(POLL_WHEN_DISABLED_MS)
                         continue
                     }
-                    if (!enabledNow) {
+                    if (!enabled) {
                         delay(POLL_WHEN_DISABLED_MS)
                         continue
                     }
@@ -90,12 +124,12 @@ class KtxAccessibilityService : AccessibilityService() {
                     Log.e(TAG, "macro cycle failed", err)
                     runtimeLog("error", err.message ?: err.javaClass.simpleName)
                 }
-                val intervalMs: Long =
+                delay(
                     repository.readRefreshIntervalMs().coerceIn(
                         MacroPreferencesRepository.MIN_REFRESH_MS,
                         MacroPreferencesRepository.MAX_REFRESH_MS,
-                    )
-                delay(intervalMs)
+                    ),
+                )
             }
         }
     }
@@ -107,58 +141,21 @@ class KtxAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        val packageName: CharSequence? = event.packageName
-        if (!KorailUiSnapshotNotes.isTargetPackage(packageName)) {
+        if (!KorailUiSnapshotNotes.isTargetPackage(event.packageName)) {
             return
-        }
-        if (Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(
-                TAG,
-                "eventType=${eventTypeToString(event.eventType)} package=$packageName",
-            )
         }
         scope.launch {
             val root: AccessibilityNodeInfo = rootInActiveWindow ?: return@launch
-            try {
-                if (!isKorailActiveWindow(root)) {
-                    return@launch
-                }
-                if (hasTicketConfirmation(root)) {
-                    val macroOn: Boolean = repository.readMacroEnabled()
-                    val reservePending: Boolean = waitingForReserve
-                    if (!macroOn && !reservePending) {
-                        return@launch
-                    }
-                    handleTicketConfirmationDetected("event")
-                    return@launch
-                }
-                if (tryAutoConfirmTicketConfirmationNoticeDialog(root)) {
-                    return@launch
-                }
-                if (!repository.readMacroEnabled()) {
-                    return@launch
-                }
-                val eventSettings: MacroSettings = repository.readMacroSettings()
-                if (eventSettings.autoConfirmIntermediateStopDialog) {
-                    tryAutoConfirmIntermediateStopDialog(root)
-                }
-                if (waitingForReserve && repository.readMacroEnabled()) {
-                    val eventType: Int = event.eventType
-                    if (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
-                        eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                    ) {
-                        val nowMs: Long = SystemClock.uptimeMillis()
-                        if (nowMs - lastReserveAssistUptimeMs >= RESERVE_EVENT_ASSIST_MIN_GAP_MS) {
-                            lastReserveAssistUptimeMs = nowMs
-                            scope.launch {
-                                tryPerformReserveTap(eventSettings)
-                            }
-                        }
-                    }
-                }
-            } finally {
-                recycleAccessibilityNode(root)
+            if (!isKorailActiveWindow(root)) {
+                return@launch
             }
+            if (hasTicketConfirmation(root)) {
+                if (repository.readMacroEnabled() || isAwaitingPostReserveConfirmation()) {
+                    handleTicketConfirmationDetected("event")
+                }
+                return@launch
+            }
+            tryAutoConfirmPostReserveNotice(root)
         }
     }
 
@@ -167,167 +164,274 @@ class KtxAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun runMacroCycle() {
-        if (!repository.readMacroEnabled()) {
+        val settings: MacroSettings = repository.readMacroSettings()
+        if (!passGates(settings, "cycle_start")) {
             return
         }
-        val settings = repository.readMacroSettings()
-        var root: AccessibilityNodeInfo = rootInActiveWindow ?: run {
-            Log.w(TAG, "macro tick skipped: rootInActiveWindow is null")
-            runtimeLog("tick", "root 없음 — 스킵")
+        // 시트가 이미 열려 있으면 왜 열렸는지 알 수 없다(직전 주기의 잔여이거나 사용자가 직접 연 것).
+        // 어느 쪽이든 어떤 등급을 노리는지 모르는 상태라 예매하지 않고 목록으로 물러난다.
+        val pending: AccessibilityNodeInfo? = rootInActiveWindow
+        if (pending != null && BookingSheetReader.isOpen(pending)) {
+            runtimeLog("sheet", "예매 시트가 열려 있어 목록으로 되돌립니다")
+            leaveSheet()
             return
         }
-        val windowPackage: String =
-            if (Build.VERSION.SDK_INT >= 30) {
-                root.packageName?.toString() ?: "unknown"
-            } else {
-                "n/a"
-            }
-        Log.i(
-            TAG,
-            "macro tick window=$windowPackage (expect ${KorailUiSnapshotNotes.PACKAGE_KORAIL_TALK} or " +
-                "${KorailUiSnapshotNotes.PACKAGE_KORAIL_MOBILE} on train list)",
-        )
-        val onKorail: Boolean = isKorailActiveWindow(root)
-        if (!onKorail) {
-            if (waitingForReserve) {
-                Log.d(TAG, "skip: foreground=$windowPackage but waitingForReserve (return to 코레일톡 for 예매)")
-                runtimeLog("skip", "코레일 포그라운드 아님 ($windowPackage), 예매 대기 중")
-            } else {
-                Log.d(TAG, "skip: foreground=$windowPackage — 매크로는 코레일 앱 포그라운드에서만 동작")
-                runtimeLog("skip", "코레일 포그라운드 아님 ($windowPackage)")
-            }
-            recycleAccessibilityNode(root)
+        if (!performRefresh()) {
+            handleRefreshUnavailable()
             return
         }
-        try {
-            if (hasTicketConfirmation(root)) {
-                handleTicketConfirmationDetected("cycle_pre_refresh")
-                return
-            }
-            if (tryAutoConfirmTicketConfirmationNoticeDialog(root)) {
-                return
-            }
-            if (dismissIntermediateStopDialogIfRequested(settings, root)) {
-                return
-            }
-            if (waitingForReserve) {
-                tryPerformReserveTap(settings)
-                return
-            }
-            val refreshed: Boolean = performRefreshClick(root)
-            if (!refreshed) {
-                Log.d(TAG, "Refresh control not found or click failed")
-                runtimeLog("refresh", "새로고침 실패 또는 컨트롤 없음")
-            } else {
-                runtimeLog("refresh", "새로고침 탭")
-            }
-        } finally {
-            recycleAccessibilityNode(root)
+        blockedCycles = 0
+        runtimeLog("refresh", "새로고침 탭")
+        val rowNodes: List<AccessibilityNodeInfo> = awaitRows() ?: return
+        val rects: List<PixelRect> = TrainRowLocator.rectsOf(rowNodes)
+        val signals: List<SoldOutSignal> = readSoldOutTwice(rects) ?: return
+        val soldOutCount: Int = signals.count { s: SoldOutSignal -> s.generalSoldOut || s.premiumSoldOut }
+        runtimeLog("parse", "행 ${rects.size}개 (매진 포함 ${soldOutCount}개)")
+
+        val opening: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
+            ?: return
+        val target: AccessibilityNodeInfo = rowNodes.getOrNull(opening.rowIndex) ?: return
+        runtimeLog("open", "${opening.rowIndex + 1}번째 행 ${columnLabel(opening)} 매진 해제 — 시트 열기")
+        if (!performClick(target)) {
+            runtimeLog("open", "행 탭 실패")
+            return
         }
-        delay(MIN_AFTER_REFRESH_MS)
-        val postRefreshGateRoot: AccessibilityNodeInfo = rootInActiveWindow ?: return
-        try {
-            if (!isKorailActiveWindow(postRefreshGateRoot)) {
-                Log.d(TAG, "parse phase skip: left Korail")
-                runtimeLog("parse", "새로고침 후 코레일 아님 — 파싱 스킵")
-                return
+        completeBooking(settings, opening)
+    }
+
+    /**
+     * 시트가 뜨기를 기다렸다가 필터를 적용하고, 통과하면 「바로 예매」까지 누른다.
+     * 어느 단계든 막히면 뒤로 나와 목록으로 돌아간다.
+     */
+    private suspend fun completeBooking(settings: MacroSettings, opening: SeatOpening?) {
+        bookingMutex.withLock {
+            val sheet: BookingSheet? = awaitSheet()
+            if (sheet == null) {
+                runtimeLog("sheet", "시트를 읽지 못했습니다 — 뒤로")
+                leaveSheet()
+                return@withLock
             }
-            if (hasTicketConfirmation(postRefreshGateRoot)) {
-                handleTicketConfirmationDetected("cycle_post_refresh")
-                return
+            if (opening != null && !selectClassTab(sheet, opening)) {
+                runtimeLog("sheet", "${sheet.trainLabel} 등급 탭 전환 실패 — 뒤로")
+                leaveSheet()
+                return@withLock
             }
-            if (tryAutoConfirmTicketConfirmationNoticeDialog(postRefreshGateRoot)) {
-                return
+            // 등급 탭을 바꾸면 좌석 옵션이 달라지므로 필터 직전에 다시 읽는다.
+            val current: BookingSheet = awaitSheet() ?: sheet
+            val rejection: String? = MacroFilterEngine.rejectionReason(current, settings)
+            if (rejection != null) {
+                runtimeLog("filter", "${current.trainLabel} 건너뜀 — $rejection")
+                leaveSheet()
+                return@withLock
             }
-            if (dismissIntermediateStopDialogIfRequested(settings, postRefreshGateRoot)) {
-                return
+            val reserve: AccessibilityNodeInfo? = rootInActiveWindow?.let { root ->
+                BookingSheetReader.findActionButton(root, KorailLabels.RESERVE_NOW)
             }
-        } finally {
-            recycleAccessibilityNode(postRefreshGateRoot)
+            if (reserve == null || !performClick(reserve)) {
+                runtimeLog("reserve", "${current.trainLabel} 「${KorailLabels.RESERVE_NOW}」 탭 실패 — 뒤로")
+                leaveSheet()
+                return@withLock
+            }
+            postReserveConfirmDeadlineUptimeMs =
+                SystemClock.uptimeMillis() + POST_RESERVE_CONFIRM_BUDGET_MS
+            runtimeLog("reserve", "${current.trainLabel} 「${KorailLabels.RESERVE_NOW}」 탭")
         }
-        val session: ParseSession = parseTrainRowsWithAdaptiveRetries()
-        if (session.rows.isEmpty()) {
-            Log.d(TAG, "Parsed zero train rows after retries")
-            runtimeLog("parse", "열차 행 0개 (재시도 후)")
+    }
+
+    /**
+     * 새로고침 버튼이 없을 때. 대개 코레일이 모달 팝업을 띄운 상태다.
+     *
+     * 실기에서 「인터넷 연결이 원활하지 않습니다」 안내창이 목록을 덮은 채로 남아, 매크로가
+     * 같은 실패만 계속 찍는 상황을 관측했다. 그 팝업은 매크로가 치울 수 없고(선택지가
+     * 「앱 종료」·「티켓 목록 보기」뿐이라 함부로 누르면 안 된다) 저절로 사라지지도 않는다.
+     * 그래서 화면에 무엇이 떠 있는지 로그로 알려 주고, 계속 막혀 있으면 멈춘다.
+     */
+    private suspend fun handleRefreshUnavailable() {
+        blockedCycles++
+        val blocker: String = describeForegroundText()
+        val suffix: String = if (blocker.isEmpty()) "" else " — 화면: $blocker"
+        runtimeLog("refresh", "새로고침 버튼이 없습니다$suffix")
+        if (blockedCycles >= MAX_BLOCKED_CYCLES) {
+            repository.setMacroEnabled(false)
+            blockedCycles = 0
+            runtimeLog("error", "코레일 화면이 막혀 있어 매크로를 멈춥니다. 화면을 확인해 주세요.")
+        }
+    }
+
+    /** 지금 화면의 짧은 문구 몇 개. 무엇이 막고 있는지 사용자에게 알려 주려고 쓴다. */
+    private fun describeForegroundText(): String {
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: return ""
+        val texts: MutableList<String> = mutableListOf()
+        NodeFinder.collectTexts(root, texts)
+        return texts
+            .map { line: String -> line.replace('\n', ' ').trim() }
+            .filter { line: String -> line.isNotEmpty() && line.length <= 60 }
+            .distinct()
+            .take(3)
+            .joinToString(" / ")
+    }
+
+    /**
+     * 새로고침 직후 「목록을 불러오고 있어요」 자리표시자가 뜨는지 잠깐 지켜본다.
+     * 뜨면 true. 캐시 등으로 끝내 안 뜨면 false를 돌려주고 호출부는 그대로 진행한다.
+     */
+    private suspend fun awaitLoadingPlaceholder(): Boolean {
+        val deadline: Long = SystemClock.elapsedRealtime() + LOADING_APPEAR_BUDGET_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val root: AccessibilityNodeInfo? = rootInActiveWindow
+            if (root != null &&
+                NodeFinder.containsText(root, KorailUiSnapshotNotes.LIST_LOADING_MARKER)
+            ) {
+                return true
+            }
+            delay(ROWS_POLL_GAP_MS)
+        }
+        return false
+    }
+
+    /**
+     * 같은 화면을 두 번 읽어 결과가 일치할 때만 신호로 인정한다.
+     *
+     * 목록이 다시 그려지는 도중에 캡처하면 매진 글자가 아직 없어 「매진이 풀렸다」로 오인한다.
+     * 실기에서 실제로 관측된 오판독이고, 그대로 두면 엉뚱한 행을 탭해 예매까지 갈 수 있다.
+     * 두 판독이 어긋나면 이번 주기는 버린다 — 취소표를 한 주기 놓치는 쪽이 잘못 사는 쪽보다 낫다.
+     */
+    private suspend fun readSoldOutTwice(rects: List<PixelRect>): List<SoldOutSignal>? {
+        val first: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
+            runtimeLog("sense", "화면 판독 실패 — 이번 주기 건너뜀")
+            return null
+        }
+        delay(SENSE_CONFIRM_GAP_MS)
+        val second: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
+            runtimeLog("sense", "화면 판독 실패 — 이번 주기 건너뜀")
+            return null
+        }
+        if (first != second) {
+            runtimeLog("sense", "판독이 흔들려 이번 주기는 건너뜁니다 (화면 갱신 중)")
+            return null
+        }
+        return second
+    }
+
+    /**
+     * 새로고침 뒤 목록이 돌아올 때까지 기다린다.
+     *
+     * 코레일톡은 새로고침을 누르면 목록 전체를 「목록을 불러오고 있어요」 자리표시자로 바꾼다.
+     * 고정 시간을 기다리면 네트워크가 느린 날 매번 빈 화면을 읽게 되므로 행이 실제로 돌아올
+     * 때까지 폴링한다. 행이 보인 뒤에도 글자가 다 그려지도록 잠깐 두고 좌표를 다시 잡는다 —
+     * 화면 캡처로 매진을 읽기 때문에 그리는 도중을 찍으면 안 된다.
+     */
+    private suspend fun awaitRows(): List<AccessibilityNodeInfo>? {
+        val start: Long = SystemClock.elapsedRealtime()
+        // 새로고침을 눌러도 목록이 자리표시자로 바뀌기까지 잠깐 걸린다. 그 사이에 읽으면
+        // 갱신 전 화면을 새 결과로 착각하므로, 자리표시자가 뜨는지 잠깐 지켜본다.
+        var sawLoading: Boolean = awaitLoadingPlaceholder()
+        val deadline: Long = SystemClock.elapsedRealtime() + ROWS_WAIT_BUDGET_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val root: AccessibilityNodeInfo? = rootInActiveWindow
+            if (root != null && isKorailActiveWindow(root)) {
+                if (hasTicketConfirmation(root)) {
+                    handleTicketConfirmationDetected("await_rows")
+                    return null
+                }
+                if (TrainRowLocator.locateRows(root).isNotEmpty()) {
+                    delay(ROWS_SETTLE_MS)
+                    val settled: AccessibilityNodeInfo = rootInActiveWindow ?: return null
+                    val rows: List<AccessibilityNodeInfo> = TrainRowLocator.locateRows(settled)
+                    if (rows.isNotEmpty()) {
+                        Log.i(TAG, "rows=${rows.size} after ${SystemClock.elapsedRealtime() - start}ms")
+                        return rows
+                    }
+                }
+                if (NodeFinder.containsText(root, KorailUiSnapshotNotes.LIST_LOADING_MARKER)) {
+                    sawLoading = true
+                }
+            }
+            delay(ROWS_POLL_GAP_MS)
+        }
+        if (sawLoading) {
+            runtimeLog("parse", "목록 로딩이 ${ROWS_WAIT_BUDGET_MS}ms 안에 끝나지 않았습니다")
         } else {
-            Log.i(TAG, "Parsed ${session.rows.size} train row(s) keys=${session.rows.map { pr -> pr.row.stableKey }}")
-            runtimeLog("parse", "열차 행 ${session.rows.size}개 keys=${session.rows.map { pr -> pr.row.stableKey }}")
-        }
-        val snapshotForClicks: AccessibilityNodeInfo = session.snapshotRoot ?: return
-        try {
-            if (!isKorailActiveWindow(snapshotForClicks)) {
-                return
-            }
-            if (hasTicketConfirmation(snapshotForClicks)) {
-                handleTicketConfirmationDetected("cycle_snapshot")
-                return
-            }
-            if (tryAutoConfirmTicketConfirmationNoticeDialog(snapshotForClicks)) {
-                return
-            }
-            if (dismissIntermediateStopDialogIfRequested(settings, snapshotForClicks)) {
-                return
-            }
-            val filteredRows: List<TrainRow> = MacroFilterEngine.filter(
-                session.rows.map { pr: ParsedTrainRow -> pr.row },
-                settings,
-            )
-            for (row: TrainRow in filteredRows) {
-                val prev: PreviousRowCells? = previousCells[row.stableKey]
-                val col: SeatColumn? = PriceTransitionDetector.findSoldOutToPriceColumn(
-                    prev,
-                    row,
-                    settings.seatClickPreference,
-                )
-                if (col == null) {
-                    continue
-                }
-                val freshClickRoot: AccessibilityNodeInfo = rootInActiveWindow ?: break
-                try {
-                    if (!isKorailActiveWindow(freshClickRoot)) {
-                        break
-                    }
-                    if (hasTicketConfirmation(freshClickRoot)) {
-                        handleTicketConfirmationDetected("cycle_price_click")
-                        return
-                    }
-                    if (tryAutoConfirmTicketConfirmationNoticeDialog(freshClickRoot)) {
-                        return
-                    }
-                    if (dismissIntermediateStopDialogIfRequested(settings, freshClickRoot)) {
-                        return
-                    }
-                    val resolved: AccessibilityNodeInfo? =
-                        parser.findPriceClickTarget(freshClickRoot, row.stableKey, col)
-                    if (resolved == null) {
-                        Log.w(TAG, "No fresh click target for transition key=${row.stableKey} col=$col")
-                        continue
-                    }
-                    if (performClick(resolved)) {
-                        Log.i(TAG, "Clicked price cell key=${row.stableKey} col=$col")
-                        runtimeLog("price", "가격 탭 key=${row.stableKey} col=$col")
-                        waitingForReserve = true
-                        break
-                    }
-                    Log.w(TAG, "performAction failed for price key=${row.stableKey}")
-                } finally {
-                    recycleAccessibilityNode(freshClickRoot)
+            runtimeLog("parse", "열차 행 0개 — 열차 목록 화면인지 확인하세요")
+            rootInActiveWindow?.let { root ->
+                if (dumpedTreeOnce.compareAndSet(false, true)) {
+                    AccessibilityTreeDump.log(root, "no rows")
                 }
             }
-            for (pr: ParsedTrainRow in session.rows) {
-                val r: TrainRow = pr.row
-                previousCells[r.stableKey] = PreviousRowCells(
-                    r.generalSeatCellText,
-                    r.firstClassSeatCellText,
-                )
+        }
+        return null
+    }
+
+    private suspend fun awaitSheet(): BookingSheet? {
+        val deadline: Long = SystemClock.elapsedRealtime() + SHEET_WAIT_BUDGET_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val root: AccessibilityNodeInfo? = rootInActiveWindow
+            if (root != null && isKorailActiveWindow(root)) {
+                if (hasTicketConfirmation(root)) {
+                    handleTicketConfirmationDetected("await_sheet")
+                    return null
+                }
+                val sheet: BookingSheet? = BookingSheetReader.read(root)
+                if (sheet != null) {
+                    return sheet
+                }
             }
-        } finally {
-            recycleAccessibilityNode(snapshotForClicks)
+            delay(SHEET_POLL_GAP_MS)
         }
-        if (!waitingForReserve) {
-            return
+        return null
+    }
+
+    /** 시트가 목표 등급 탭을 보고 있게 만든다. 이미 맞으면 아무것도 하지 않는다. */
+    private suspend fun selectClassTab(sheet: BookingSheet, opening: SeatOpening): Boolean {
+        val label: String = KorailLabels.classLabelFor(opening.column, sheet.classTabs)
+        if (!sheet.classTabs.contains(label)) {
+            // 등급 탭이 아예 없는 시트(단일 등급)면 그대로 진행한다.
+            return sheet.classTabs.isEmpty()
         }
-        pollReserveButtonWithRetries(settings)
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: return false
+        val tab: AccessibilityNodeInfo = BookingSheetReader.findClassTab(root, label) ?: return false
+        // 등급 탭은 선택 상태를 isSelected가 아니라 isChecked로 노출한다 (실기 확인).
+        if (tab.isChecked) {
+            return true
+        }
+        val clicked: Boolean = performClick(tab)
+        if (clicked) {
+            delay(CLASS_TAB_SETTLE_MS)
+        }
+        return clicked
+    }
+
+    private suspend fun leaveSheet() {
+        withContext(Dispatchers.Main) {
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+        delay(BACK_SETTLE_MS)
+        tracker.reset()
+    }
+
+    /**
+     * 매 단계 앞에 두는 공통 확인. 코레일이 아니거나 예매가 이미 끝난 상태면 false.
+     */
+    private suspend fun passGates(settings: MacroSettings, source: String): Boolean {
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: run {
+            runtimeLog("tick", "화면을 읽지 못했습니다 — 스킵")
+            return false
+        }
+        if (!isKorailActiveWindow(root)) {
+            runtimeLog("skip", "코레일 앱이 앞에 있지 않습니다")
+            return false
+        }
+        if (hasTicketConfirmation(root)) {
+            handleTicketConfirmationDetected(source)
+            return false
+        }
+        if (tryAutoConfirmPostReserveNotice(root)) {
+            return false
+        }
+        if (settings.autoConfirmIntermediateStopDialog && tryAutoConfirmIntermediateStop(root)) {
+            return false
+        }
+        return true
     }
 
     private suspend fun handleTicketConfirmationDetected(source: String): Boolean {
@@ -336,131 +440,18 @@ class KtxAccessibilityService : AccessibilityService() {
         }
         val settings: MacroSettings = repository.readMacroSettings()
         NotificationHelper.triggerUserAlert(applicationContext, settings.ticketAlertMode)
-        waitingForReserve = false
-        postReserveGenericConfirmDeadlineUptimeMs = 0L
+        postReserveConfirmDeadlineUptimeMs = 0L
         repository.setMacroEnabled(false)
+        tracker.reset()
         runtimeLog("ticket", "승차권 정보 확인 ($source) — 매크로 중지")
         Log.i(TAG, "Ticket confirmation handled ($source)")
         return true
     }
 
-    /**
-     * 코레일 예매 바텀시트에서 「예매」 탭. 이벤트 보조와 매크로 루프가 동시에 돌지 않도록 [reserveInteractionMutex] 사용.
-     */
-    private suspend fun tryPerformReserveTap(settings: MacroSettings): Boolean {
-        return reserveInteractionMutex.withLock {
-            if (!repository.readMacroEnabled() || !waitingForReserve) {
-                return@withLock false
-            }
-            val tapRoot: AccessibilityNodeInfo = rootInActiveWindow ?: return@withLock false
-            try {
-                if (!isKorailActiveWindow(tapRoot)) {
-                    return@withLock false
-                }
-                if (hasTicketConfirmation(tapRoot)) {
-                    handleTicketConfirmationDetected("reserve_tap")
-                    return@withLock true
-                }
-                if (tryAutoConfirmTicketConfirmationNoticeDialog(tapRoot)) {
-                    return@withLock false
-                }
-                if (dismissIntermediateStopDialogIfRequested(settings, tapRoot)) {
-                    return@withLock false
-                }
-                val target: AccessibilityNodeInfo? = NodeFinder.findReserveButton(tapRoot)
-                if (target == null) {
-                    return@withLock false
-                }
-                val ok: Boolean = performClick(target)
-                if (ok) {
-                    waitingForReserve = false
-                    postReserveGenericConfirmDeadlineUptimeMs =
-                        SystemClock.uptimeMillis() + POST_RESERVE_GENERIC_CONFIRM_BUDGET_MS
-                    Log.i(TAG, "Clicked reserve")
-                    runtimeLog("reserve", "예매 버튼 탭 (바텀시트)")
-                }
-                ok
-            } finally {
-                recycleAccessibilityNode(tapRoot)
-            }
-        }
-    }
-
-    private suspend fun pollReserveButtonWithRetries(settings: MacroSettings) {
-        val deadlineMs: Long = SystemClock.elapsedRealtime() + RESERVE_POLL_BUDGET_MS
-        var attempt: Int = 0
-        while (waitingForReserve && SystemClock.elapsedRealtime() < deadlineMs) {
-            if (!repository.readMacroEnabled()) {
-                break
-            }
-            val finished: Boolean = tryPerformReserveTap(settings)
-            if (finished) {
-                return
-            }
-            attempt++
-            val gapMs: Long =
-                if (attempt <= 8) {
-                    RESERVE_POLL_GAP_QUICK_MS
-                } else {
-                    RESERVE_POLL_GAP_SLOW_MS
-                }
-            delay(gapMs)
-        }
-        if (waitingForReserve) {
-            runtimeLog("reserve", "예매 버튼 미발견 (바텀시트 타임아웃)")
-        }
-    }
-
-    private suspend fun parseTrainRowsWithAdaptiveRetries(): ParseSession {
-        val deadlineMs: Long = SystemClock.elapsedRealtime() + POST_REFRESH_PARSE_BUDGET_MS
-        var attemptIndex: Int = 0
-        while (SystemClock.elapsedRealtime() < deadlineMs) {
-            val snapshot: AccessibilityNodeInfo = rootInActiveWindow ?: return ParseSession(emptyList(), null)
-            if (!isKorailActiveWindow(snapshot)) {
-                recycleAccessibilityNode(snapshot)
-                return ParseSession(emptyList(), null)
-            }
-            val parsed: List<ParsedTrainRow> = parser.parse(snapshot)
-            if (parsed.isNotEmpty()) {
-                return ParseSession(parsed, snapshot)
-            }
-            recycleAccessibilityNode(snapshot)
-            attemptIndex++
-            val gapMs: Long =
-                if (attemptIndex <= 4) {
-                    PARSE_GAP_QUICK_MS
-                } else {
-                    PARSE_GAP_SLOW_MS
-                }
-            delay(gapMs)
-        }
-        return ParseSession(emptyList(), null)
-    }
-
-    /**
-     * [rows] correspond to [snapshotRoot]; caller recycles [snapshotRoot] after use.
-     */
-    private data class ParseSession(
-        val rows: List<ParsedTrainRow>,
-        val snapshotRoot: AccessibilityNodeInfo?,
-    )
-
-    private fun isKorailActiveWindow(root: AccessibilityNodeInfo): Boolean {
-        if (Build.VERSION.SDK_INT < 30) {
-            return true
-        }
-        return KorailUiSnapshotNotes.isTargetPackage(root.packageName)
-    }
-
-    private suspend fun performRefreshClick(root: AccessibilityNodeInfo): Boolean {
-        val target: AccessibilityNodeInfo? = NodeFinder.findClickableWithTextOrId(
-            root,
-            KorailUiSnapshotNotes.REFRESH_TEXT_HINT,
-            KorailUiSnapshotNotes.VIEW_ID_REFRESH,
-        )
-        if (target == null) {
-            return false
-        }
+    private suspend fun performRefresh(): Boolean {
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: return false
+        val target: AccessibilityNodeInfo =
+            NodeFinder.findClickableContainingText(root, KorailLabels.REFRESH) ?: return false
         return performClick(target)
     }
 
@@ -470,154 +461,68 @@ class KtxAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isKorailActiveWindow(root: AccessibilityNodeInfo): Boolean {
+        return KorailUiSnapshotNotes.isTargetPackage(root.packageName)
+    }
+
     private fun hasTicketConfirmation(root: AccessibilityNodeInfo): Boolean {
-        val nodes: List<AccessibilityNodeInfo> =
-            root.findAccessibilityNodeInfosByText(KorailUiSnapshotNotes.TICKET_CONFIRMATION_TITLE)
-        try {
-            return nodes.isNotEmpty()
-        } finally {
-            recycleNodes(nodes)
-        }
+        return root
+            .findAccessibilityNodeInfosByText(KorailUiSnapshotNotes.TICKET_CONFIRMATION_TITLE)
+            .isNotEmpty()
     }
 
-    private suspend fun dismissIntermediateStopDialogIfRequested(
-        settings: MacroSettings,
-        root: AccessibilityNodeInfo,
-    ): Boolean {
-        if (!settings.autoConfirmIntermediateStopDialog) {
-            return false
-        }
-        return tryAutoConfirmIntermediateStopDialog(root)
-    }
-
-    /**
-     * Locates 「확인」 near body text matching [KorailUiSnapshotNotes.INTERMEDIATE_STOP_DIALOG_TEXT_MARKERS].
-     * Does not run when [hasTicketConfirmation] is true.
-     */
-    private fun findIntermediateStopConfirmTarget(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (hasTicketConfirmation(root)) {
-            return null
-        }
-        for (marker: String in KorailUiSnapshotNotes.INTERMEDIATE_STOP_DIALOG_TEXT_MARKERS) {
-            val anchor: AccessibilityNodeInfo? =
-                NodeFinder.findFirstPreorderContainingText(root, marker)
-            if (anchor == null) {
-                continue
-            }
-            try {
-                val target: AccessibilityNodeInfo? =
-                    findConfirmClickableNearAnchor(anchor, KorailUiSnapshotNotes.INTERMEDIATE_STOP_CONFIRM_LABEL)
-                if (target != null) {
-                    return target
-                }
-            } finally {
-                if (anchor !== root) {
-                    recycleAccessibilityNode(anchor)
-                }
-            }
-        }
-        return null
-    }
-
-    private fun findConfirmClickableNearAnchor(
-        anchor: AccessibilityNodeInfo,
-        label: String,
-    ): AccessibilityNodeInfo? {
-        var hops: Int = 0
-        var node: AccessibilityNodeInfo? = anchor.parent
-        while (node != null && hops < INTERMEDIATE_STOP_DIALOG_MAX_PARENT_HOPS) {
-            val confirm: AccessibilityNodeInfo? = NodeFinder.findClickableByLabel(node, label)
-            if (confirm != null) {
-                node.recycle()
-                return confirm
-            }
-            val parent: AccessibilityNodeInfo? = node.parent
-            node.recycle()
-            node = parent
-            hops++
-        }
-        node?.recycle()
-        return null
-    }
-
-    private suspend fun tryAutoConfirmIntermediateStopDialog(root: AccessibilityNodeInfo): Boolean {
-        val target: AccessibilityNodeInfo? = findIntermediateStopConfirmTarget(root)
-        if (target == null) {
-            return false
-        }
-        try {
-            val ok: Boolean = performClick(target)
-            if (ok) {
-                runtimeLog("dialog", "정차 안내 확인 자동 탭")
-                Log.i(TAG, "Auto-confirmed intermediate stop dialog")
-            }
-            return ok
-        } finally {
-            recycleAccessibilityNode(target)
-        }
-    }
-
-    /**
-     * True only in the window between a successful reserve tap and [handleTicketConfirmationDetected]
-     * (or its timeout). Booking is already committed in this window, so any dialog blocking the
-     * 승차권 정보 확인 title — known wording or not — is assumed informational and safe to auto-dismiss.
-     */
     private fun isAwaitingPostReserveConfirmation(): Boolean {
-        val deadline: Long = postReserveGenericConfirmDeadlineUptimeMs
+        val deadline: Long = postReserveConfirmDeadlineUptimeMs
         if (deadline == 0L) {
             return false
         }
         if (SystemClock.uptimeMillis() >= deadline) {
-            postReserveGenericConfirmDeadlineUptimeMs = 0L
+            postReserveConfirmDeadlineUptimeMs = 0L
             return false
         }
         return true
     }
 
     /**
-     * Unlike the intermediate-stop dialog, any post-reserve notice (e.g. 이용안내 / 연접 좌석 재배정 안내)
-     * can appear layered on top of the 승차권 정보 확인 screen and hide its title, so it must be checked
-     * (and dismissed) even when [hasTicketConfirmation] is currently false for the active root. Body
-     * text is not matched here — see [isAwaitingPostReserveConfirmation] for why any 확인 button found
-     * in this window is safe to tap.
+     * 예매 직후 뜨는 안내 팝업(이용안내·연접 좌석 재배정 등)의 「확인」을 눌러 준다.
+     * 이 창은 「승차권 정보 확인」 위에 겹쳐 제목을 가리므로 본문 문구를 따지지 않는다 —
+     * 이미 예매가 진행된 뒤라 남은 팝업은 안내성이라고 본다.
      */
-    private suspend fun tryAutoConfirmTicketConfirmationNoticeDialog(root: AccessibilityNodeInfo): Boolean {
+    private suspend fun tryAutoConfirmPostReserveNotice(root: AccessibilityNodeInfo): Boolean {
         if (!isAwaitingPostReserveConfirmation()) {
             return false
         }
         val target: AccessibilityNodeInfo =
-            NodeFinder.findClickableByLabel(root, KorailUiSnapshotNotes.TICKET_CONFIRMATION_NOTICE_CONFIRM_LABEL)
-                ?: return false
-        try {
-            val ok: Boolean = performClick(target)
-            if (ok) {
-                runtimeLog("dialog", "예매 후 안내 팝업 확인 자동 탭")
-                Log.i(TAG, "Auto-confirmed post-reserve notice dialog")
+            NodeFinder.findClickableByLabel(root, KorailUiSnapshotNotes.CONFIRM_LABEL) ?: return false
+        val clicked: Boolean = performClick(target)
+        if (clicked) {
+            runtimeLog("dialog", "예매 후 안내 팝업 확인")
+        }
+        return clicked
+    }
+
+    /** 중간 정차역 안내 팝업. 사용자가 켠 경우에만 누른다. */
+    private suspend fun tryAutoConfirmIntermediateStop(root: AccessibilityNodeInfo): Boolean {
+        for (marker: String in KorailUiSnapshotNotes.INTERMEDIATE_STOP_DIALOG_TEXT_MARKERS) {
+            val anchor: AccessibilityNodeInfo =
+                NodeFinder.findNodeContainingText(root, marker) ?: continue
+            // 팝업 본문 주변으로만 「확인」을 찾는다. 트리 전체에서 찾으면 화면 다른 곳의
+            // 같은 라벨을 누를 수 있다.
+            val target: AccessibilityNodeInfo = NodeFinder.findClickableByLabelNearAnchor(
+                anchor,
+                KorailUiSnapshotNotes.CONFIRM_LABEL,
+            ) ?: continue
+            val clicked: Boolean = performClick(target)
+            if (clicked) {
+                runtimeLog("dialog", "정차 안내 확인")
+                return true
             }
-            return ok
-        } finally {
-            recycleAccessibilityNode(target)
         }
+        return false
     }
 
-    private fun recycleNodes(nodes: List<AccessibilityNodeInfo>) {
-        val size: Int = nodes.size
-        for (i in 0 until size) {
-            recycleAccessibilityNode(nodes[i])
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun recycleAccessibilityNode(node: AccessibilityNodeInfo) {
-        node.recycle()
-    }
-
-    private fun eventTypeToString(eventType: Int): String {
-        return when (eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "TYPE_WINDOW_STATE_CHANGED"
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "TYPE_WINDOW_CONTENT_CHANGED"
-            else -> eventType.toString()
-        }
+    private fun columnLabel(opening: SeatOpening): String {
+        return KorailLabels.classLabelFor(opening.column, emptyList())
     }
 
     private fun runtimeLog(kind: String, detail: String) {
@@ -627,18 +532,29 @@ class KtxAccessibilityService : AccessibilityService() {
         }
     }
 
-    companion object {
-        private const val TAG: String = "KtxA11y"
-        private const val POLL_WHEN_DISABLED_MS: Long = 400L
-        private const val MIN_AFTER_REFRESH_MS: Long = 200L
-        private const val POST_REFRESH_PARSE_BUDGET_MS: Long = 1300L
-        private const val PARSE_GAP_QUICK_MS: Long = 90L
-        private const val PARSE_GAP_SLOW_MS: Long = 220L
-        private const val RESERVE_POLL_BUDGET_MS: Long = 2800L
-        private const val RESERVE_POLL_GAP_QUICK_MS: Long = 75L
-        private const val RESERVE_POLL_GAP_SLOW_MS: Long = 160L
-        private const val RESERVE_EVENT_ASSIST_MIN_GAP_MS: Long = 85L
-        private const val INTERMEDIATE_STOP_DIALOG_MAX_PARENT_HOPS: Int = 12
-        private const val POST_RESERVE_GENERIC_CONFIRM_BUDGET_MS: Long = 15_000L
+    private companion object {
+        const val TAG: String = "KtxA11y"
+        const val POLL_WHEN_DISABLED_MS: Long = 400L
+
+        /** 새로고침 후 목록이 돌아올 때까지 기다리는 최대 시간. */
+        const val ROWS_WAIT_BUDGET_MS: Long = 4000L
+        const val ROWS_POLL_GAP_MS: Long = 120L
+
+        /** 행이 보인 뒤 글자가 다 그려지도록 두는 시간. 캡처가 그리는 도중을 찍지 않게 한다. */
+        const val ROWS_SETTLE_MS: Long = 220L
+
+        /** 새로고침 직후 로딩 자리표시자가 나타나기를 지켜보는 시간. */
+        const val LOADING_APPEAR_BUDGET_MS: Long = 700L
+
+        /** 판독을 한 번 더 해 비교하기까지의 간격. takeScreenshot 최소 간격(333ms)보다 커야 한다. */
+        const val SENSE_CONFIRM_GAP_MS: Long = 380L
+        const val SHEET_WAIT_BUDGET_MS: Long = 2500L
+        const val SHEET_POLL_GAP_MS: Long = 100L
+        const val CLASS_TAB_SETTLE_MS: Long = 250L
+        const val BACK_SETTLE_MS: Long = 300L
+        const val POST_RESERVE_CONFIRM_BUDGET_MS: Long = 15_000L
+
+        /** 이만큼 연속으로 새로고침조차 못 하면 매크로를 멈추고 사용자에게 알린다. */
+        const val MAX_BLOCKED_CYCLES: Int = 5
     }
 }

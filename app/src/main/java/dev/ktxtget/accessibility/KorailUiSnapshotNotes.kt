@@ -1,64 +1,59 @@
 package dev.ktxtget.accessibility
 
 /**
- * Single reference for Korail UI structure: product strings and Layout Inspector outputs.
- * Update [VIEW_ID_] constants after capturing resource-ids on a device (Phase 1 / iteration).
+ * 코레일 앱 화면에 대한 사실 기록. 실기(SM-F731N / 코레일톡 7.0.2, 2026-08) 접근성 덤프 기준이다.
+ *
+ * ## 리뉴얼로 달라진 전제
+ * 코레일톡 7.x는 Jetpack Compose로 재작성되면서 두 가지가 바뀌었다.
+ *
+ * 1. **`resource-id`가 트리 전체에 하나도 없다.** 예전에 두었던 `VIEW_ID_*` 상수는 채울 방법이
+ *    없어져 전부 제거했다. 노드는 라벨(text/contentDescription)과 좌표로만 찾는다.
+ * 2. **열차 목록 행이 텍스트를 전혀 노출하지 않는다.** 각 행은
+ *    `Button text='' content-desc='' NAF=true` 인 빈 리프다. TalkBack을 켜고
+ *    touch exploration까지 활성화해도 동일했다(코레일톡 쪽 접근성 회귀로 보인다).
+ *    그래서 좌석 상태는 화면 캡처 픽셀로 읽고([dev.ktxtget.domain.SoldOutPixelClassifier]),
+ *    정확한 판단은 행을 탭해 연 바텀시트 텍스트로 한다([dev.ktxtget.domain.BookingSheet]).
+ *
+ * 헤더·바텀시트·홈 화면은 정상적으로 텍스트를 노출한다.
+ * 문구 상수는 [dev.ktxtget.domain.KorailLabels]에 모아 두었다.
  */
 object KorailUiSnapshotNotes {
-    /** Legacy 코레일 모바일 (일반 조회 앱). */
-    const val PACKAGE_KORAIL_MOBILE: String = "kr.co.korail.mobile"
     /** 코레일톡 (주 사용처). */
     const val PACKAGE_KORAIL_TALK: String = "com.korail.talk"
-    /**
-     * Seat cells (매진/원) whose vertical centers differ by at most this many px are one visual row.
-     * 코레일톡·Compose 등 RecyclerView 직계 자식이 없을 때 좌표 클러스터링에 사용.
-     */
-    const val SEAT_ROW_CLUSTER_THRESHOLD_PX: Int = 56
+
+    /** 구 코레일 모바일. 아직 남아 있는 사용자를 위해 대상에 둔다. */
+    const val PACKAGE_KORAIL_MOBILE: String = "kr.co.korail.mobile"
 
     val KORAIL_TARGET_PACKAGES: Set<String> = setOf(
-        PACKAGE_KORAIL_MOBILE,
         PACKAGE_KORAIL_TALK,
+        PACKAGE_KORAIL_MOBILE,
     )
 
     fun isTargetPackage(packageName: CharSequence?): Boolean {
         val name: String = packageName?.toString() ?: return false
         return name in KORAIL_TARGET_PACKAGES
     }
-    /** Shown on the flow after tapping **예매** (accessibility tree title or text probe). */
+
+    /** 예매 완료 직전 화면. 여기 닿으면 알림을 띄우고 매크로를 멈춘다. */
     const val TICKET_CONFIRMATION_TITLE: String = "승차권 정보 확인"
-    /**
-     * Intermediate-stop notice body often contains one of these (e.g. "OOO을 정차하는 열차입니다").
-     * Tune after capturing accessibility trees if 코레일 wording changes.
-     */
+
+    /** 중간 정차역 안내 팝업 본문에 들어가는 문구. */
     val INTERMEDIATE_STOP_DIALOG_TEXT_MARKERS: List<String> = listOf(
         "정차하는",
     )
-    /** Primary action on the intermediate-stop notice dialog. */
-    const val INTERMEDIATE_STOP_CONFIRM_LABEL: String = "확인"
+
+    /** 안내 팝업의 기본 동작 버튼. */
+    const val CONFIRM_LABEL: String = "확인"
+
     /**
-     * Primary action on any post-reserve notice dialog (e.g. 「이용안내」 연접 좌석 재배정 안내) that can appear
-     * layered on top of the 승차권 정보 확인 screen and hide [TICKET_CONFIRMATION_TITLE]. Matched by label only
-     * (not body text) — see [dev.ktxtget.service.KtxAccessibilityService.isAwaitingPostReserveConfirmation].
+     * 새로고침을 누르면 목록 전체가 이 자리표시자로 잠깐 교체된다. 이때는 행이 하나도 없으므로
+     * 고정 시간을 기다리지 말고 행이 돌아올 때까지 폴링해야 한다 (실기에서 확인한 실패 원인).
      */
-    const val TICKET_CONFIRMATION_NOTICE_CONFIRM_LABEL: String = "확인"
-    /** Bottom sheet primary action label (Phase 2 tap target). */
-    const val RESERVE_BUTTON_LABEL: String = "예매"
-    /** Cell label before a seat opens (sold out). */
-    const val SOLD_OUT_LABEL: String = "매진"
+    const val LIST_LOADING_MARKER: String = "목록을 불러오고 있어요"
+
     /**
-     * Price pattern for Phase 2 — document regex in domain layer later; kept here for discovery alignment.
+     * 목록 행으로 인정할 최소 높이(px). 스크롤 경계에서 잘린 행은 픽셀 판정이 어긋나므로 버린다.
+     * 실기 기준 정상 행 높이는 282px이다.
      */
-    const val PRICE_SAMPLE_PATTERN: String = "\\d{1,3}(,\\d{3})*원"
-    /** Recycler row or row wrapper: set from Layout Inspector (train list). */
-    const val VIEW_ID_TRAIN_ROW_ROOT: String = ""
-    /** Tap target when view-id lookup fails (Korail often uses this label). */
-    const val REFRESH_TEXT_HINT: String = "새로고침"
-    /** List screen refresh control. */
-    const val VIEW_ID_REFRESH: String = ""
-    /** General / first-class price cell (if distinct ids). */
-    const val VIEW_ID_PRICE_GENERAL: String = ""
-    const val VIEW_ID_PRICE_FIRST: String = ""
-    /** Bottom sheet root or **예매** button when stable ids exist. */
-    const val VIEW_ID_BOTTOM_SHEET_ROOT: String = ""
-    const val VIEW_ID_RESERVE_BUTTON: String = ""
+    const val MIN_ROW_HEIGHT_PX: Int = 160
 }

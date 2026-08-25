@@ -1,94 +1,86 @@
 package dev.ktxtget.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MacroFilterEngineTest {
+
+    private fun sheet(
+        label: String = "KTX 007",
+        number: String = "7",
+        seats: List<String> = listOf("1량"),
+        actions: List<String> = listOf("좌석 선택", "바로 예매"),
+    ): BookingSheet = BookingSheet(
+        trainLabel = label,
+        trainType = label.substringBefore(' '),
+        trainNumber = number,
+        classTabs = listOf("일반실", "특실"),
+        seatOptionTexts = seats,
+        actionLabels = actions,
+    )
+
     @Test
-    fun excluded_train_number_removes_row() {
-        val row: TrainRow = TrainRow(
-            stableKey = "001",
-            rawLineTexts = listOf("KTX 001"),
-            generalSeatCellText = "매진",
-            firstClassSeatCellText = "매진",
-        )
-        val settings: MacroSettings = MacroSettings(
-            excludedTrainNumbers = setOf("001"),
-            excludeFreeseatRows = false,
-            seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
-        )
-        val actual: List<TrainRow> = MacroFilterEngine.filter(listOf(row), settings)
-        assertEquals(0, actual.size)
+    fun `기본 설정이면 통과한다`() {
+        assertNull(MacroFilterEngine.rejectionReason(sheet(), MacroSettings.DEFAULT))
     }
 
     @Test
-    fun freeseat_filter_removes_row() {
-        val row: TrainRow = TrainRow(
-            stableKey = "002",
-            rawLineTexts = listOf("자유석 포함"),
-            generalSeatCellText = "매진",
-            firstClassSeatCellText = "매진",
+    fun `예약대기만 있는 시트는 막는다`() {
+        val reason: String? = MacroFilterEngine.rejectionReason(
+            sheet(actions = listOf("예약 대기 신청")),
+            MacroSettings.DEFAULT,
         )
-        val settings: MacroSettings = MacroSettings(
-            excludedTrainNumbers = emptySet(),
-            excludeFreeseatRows = true,
-            seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
-        )
-        val actual: List<TrainRow> = MacroFilterEngine.filter(listOf(row), settings)
-        assertEquals(0, actual.size)
+        assertNotNull(reason)
     }
 
     @Test
-    fun standing_combo_in_general_cell_removed_when_enabled() {
-        val row: TrainRow = TrainRow(
-            stableKey = "004",
-            rawLineTexts = listOf("KTX 004"),
-            generalSeatCellText = "입석+좌석",
-            firstClassSeatCellText = "매진",
-        )
-        val settings: MacroSettings = MacroSettings(
-            excludedTrainNumbers = emptySet(),
-            excludeFreeseatRows = false,
-            excludeGeneralStandingComboRows = true,
-            seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
-        )
-        val actual: List<TrainRow> = MacroFilterEngine.filter(listOf(row), settings)
-        assertEquals(0, actual.size)
+    fun `제외 열차번호는 앞자리 0과 무관하게 막는다`() {
+        val settings: MacroSettings =
+            MacroSettings.DEFAULT.copy(excludedTrainNumbers = setOf("7"))
+        assertNotNull(MacroFilterEngine.rejectionReason(sheet(number = "7"), settings))
+        assertNull(MacroFilterEngine.rejectionReason(sheet(number = "121"), settings))
     }
 
     @Test
-    fun standing_only_in_general_cell_removed_when_enabled() {
-        val row: TrainRow = TrainRow(
-            stableKey = "005",
-            rawLineTexts = listOf("KTX 005"),
-            generalSeatCellText = "입석",
-            firstClassSeatCellText = "매진",
+    fun `네자리 열차번호도 제외할 수 있다`() {
+        val settings: MacroSettings = MacroSettings.DEFAULT.copy(
+            excludedTrainNumbers = TrainExcludeNumbersParser.parseCommaSeparated("4135"),
         )
-        val settings: MacroSettings = MacroSettings(
-            excludedTrainNumbers = emptySet(),
-            excludeFreeseatRows = false,
-            excludeGeneralStandingOnlyRows = true,
-            seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
+        assertNotNull(
+            MacroFilterEngine.rejectionReason(sheet(label = "KTX-산천 4135", number = "4135"), settings),
         )
-        val actual: List<TrainRow> = MacroFilterEngine.filter(listOf(row), settings)
-        assertEquals(0, actual.size)
     }
 
     @Test
-    fun standing_combo_not_removed_by_standing_only_flag() {
-        val row: TrainRow = TrainRow(
-            stableKey = "006",
-            rawLineTexts = listOf("KTX 006"),
-            generalSeatCellText = "입석+좌석",
-            firstClassSeatCellText = "매진",
+    fun `자유석 제외 설정이 켜지면 막는다`() {
+        val settings: MacroSettings = MacroSettings.DEFAULT.copy(excludeFreeseatRows = true)
+        assertNotNull(MacroFilterEngine.rejectionReason(sheet(seats = listOf("자유석", "1량")), settings))
+        assertNull(MacroFilterEngine.rejectionReason(sheet(seats = listOf("1량")), settings))
+    }
+
+    @Test
+    fun `입석 더하기 좌석 제외가 켜지면 막는다`() {
+        val settings: MacroSettings =
+            MacroSettings.DEFAULT.copy(excludeGeneralStandingComboRows = true)
+        assertNotNull(MacroFilterEngine.rejectionReason(sheet(seats = listOf("입석+좌석")), settings))
+    }
+
+    @Test
+    fun `입석만 제외 설정은 입석 더하기 좌석을 막지 않는다`() {
+        val settings: MacroSettings =
+            MacroSettings.DEFAULT.copy(excludeGeneralStandingOnlyRows = true)
+        assertNull(MacroFilterEngine.rejectionReason(sheet(seats = listOf("입석+좌석")), settings))
+        assertNotNull(MacroFilterEngine.rejectionReason(sheet(seats = listOf("입석")), settings))
+    }
+
+    @Test
+    fun `막힌 이유는 사람이 읽을 수 있는 문구다`() {
+        val reason: String? = MacroFilterEngine.rejectionReason(
+            sheet(seats = listOf("자유석")),
+            MacroSettings.DEFAULT.copy(excludeFreeseatRows = true),
         )
-        val settings: MacroSettings = MacroSettings(
-            excludedTrainNumbers = emptySet(),
-            excludeFreeseatRows = false,
-            excludeGeneralStandingOnlyRows = true,
-            seatClickPreference = SeatClickPreference.BOTH_PREFER_GENERAL,
-        )
-        val actual: List<TrainRow> = MacroFilterEngine.filter(listOf(row), settings)
-        assertEquals(1, actual.size)
+        assertEquals("자유석 제외", reason)
     }
 }

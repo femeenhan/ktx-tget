@@ -5,25 +5,38 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TrainExcludeNumbersParserTest {
+
     @Test
-    fun parse_comma_and_pad() {
-        val actual: Set<String> = TrainExcludeNumbersParser.parseCommaSeparated("116, 82 ,082")
-        assertEquals(setOf("116", "082"), actual)
+    fun `앞자리 0을 뗀 형태로 정규화한다`() {
+        assertEquals("7", TrainExcludeNumbersParser.normalizeToken("007"))
+        assertEquals("7", TrainExcludeNumbersParser.normalizeToken("7"))
+        assertEquals("121", TrainExcludeNumbersParser.normalizeToken("121"))
     }
 
     @Test
-    fun rejects_non_digit_and_long_tokens() {
-        val actual: Set<String> = TrainExcludeNumbersParser.parseCommaSeparated("116, abc, 1234")
-        assertEquals(setOf("116"), actual)
+    fun `네자리 열차번호를 받는다`() {
+        assertEquals("4135", TrainExcludeNumbersParser.normalizeToken("4135"))
+        assertEquals("4031", TrainExcludeNumbersParser.normalizeToken("4031"))
     }
 
     @Test
-    fun normalize_three_digit_unchanged() {
-        assertEquals("082", TrainExcludeNumbersParser.normalizeToken("082"))
+    fun `다섯자리 이상과 숫자 아닌 값은 버린다`() {
+        assertNull(TrainExcludeNumbersParser.normalizeToken("41350"))
+        assertNull(TrainExcludeNumbersParser.normalizeToken("KTX"))
+        assertNull(TrainExcludeNumbersParser.normalizeToken("12a"))
+        assertNull(TrainExcludeNumbersParser.normalizeToken(""))
     }
 
     @Test
-    fun normalize_four_digits_null() {
-        assertNull(TrainExcludeNumbersParser.normalizeToken("1234"))
+    fun `쉼표 목록을 파싱하고 표기가 달라도 같은 값으로 묶는다`() {
+        assertEquals(
+            setOf("7", "121", "4135"),
+            TrainExcludeNumbersParser.parseCommaSeparated("007, 7, 121, 4135"),
+        )
+    }
+
+    @Test
+    fun `빈 조각과 공백은 무시한다`() {
+        assertEquals(setOf("1"), TrainExcludeNumbersParser.parseCommaSeparated(" 001 , , "))
     }
 }
