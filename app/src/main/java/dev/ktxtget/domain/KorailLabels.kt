@@ -13,6 +13,18 @@ object KorailLabels {
     /** 바텀시트 기본 예매 버튼. 구 버전의 "예매"에서 바뀌었다. */
     const val RESERVE_NOW: String = "바로 예매"
 
+    /** 입석+좌석만 남은 열차의 예매 버튼. 「바로 예매」 대신 이 하나만 뜬다 (7.0.10 실기). */
+    const val RESERVE_STANDING_PLUS_SEAT: String = "입석+좌석 예매"
+
+    /** 누르면 바로 예매로 이어지는 버튼들. 우선순위 순. */
+    val RESERVE_LABELS: List<String> = listOf(RESERVE_NOW, RESERVE_STANDING_PLUS_SEAT)
+
+    /**
+     * 매진 열차 시트의 안내 문구. 7.0.10부터 매진 행도 시트가 열리고,
+     * 「좌석 선택」「바로 예매」가 비활성(enabled=false)인 채로 함께 보인다.
+     */
+    const val SHEET_SOLD_OUT_NOTICE: String = "모든 좌석이 판매되어"
+
     /** 좌석을 직접 고르는 경로. 단계가 늘어 기본으로는 쓰지 않는다. */
     const val CHOOSE_SEAT: String = "좌석 선택"
 

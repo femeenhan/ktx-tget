@@ -9,13 +9,16 @@ object MacroFilterEngine {
 
     /** 통과하면 null, 막히면 사용자에게 보여줄 이유. */
     fun rejectionReason(sheet: BookingSheet, settings: MacroSettings): String? {
-        if (!sheet.actionLabels.contains(KorailLabels.RESERVE_NOW)) {
-            return "예매 버튼 없음 (${sheet.actionLabels.joinToString("/")})"
+        if (sheet.seatOptionBlob.contains(KorailLabels.SHEET_SOLD_OUT_NOTICE)) {
+            return "시트를 열어 보니 매진 (그새 팔림)"
         }
+        val reserveLabel: String = sheet.reserveLabel
+            ?: return "예매 버튼 없음 (${sheet.actionLabels.joinToString("/")})"
         if (isExcludedTrain(sheet.trainNumber, settings.excludedTrainNumbers)) {
             return "제외 열차번호 (${sheet.trainLabel})"
         }
-        val seats: String = sheet.seatOptionBlob
+        // 입석+좌석만 남은 시트는 좌석 옵션 줄 없이 버튼 라벨로만 그 사실을 알려 준다.
+        val seats: String = "${sheet.seatOptionBlob} $reserveLabel"
         if (settings.excludeFreeseatRows && seats.contains(KorailLabels.FREE_SEAT)) {
             return "자유석 제외"
         }

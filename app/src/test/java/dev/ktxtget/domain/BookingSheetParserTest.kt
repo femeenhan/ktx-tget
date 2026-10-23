@@ -86,4 +86,31 @@ class BookingSheetParserTest {
         )!!
         assertEquals("1", sheet.trainNumber)
     }
+
+    @Test
+    fun `매진 시트의 비활성 버튼은 액션에서 뺀다`() {
+        // 실기 덤프(코레일톡 7.0.10, 매진 KTX-이음 711 행 탭). 두 버튼 모두 enabled=false.
+        val sheet: BookingSheet = BookingSheetParser.parse(
+            listOf(
+                "KTX-이음 711",
+                "운행 정보",
+                "이 열차는 모든 좌석이 판매되어 예매가 불가해요.",
+                "좌석 선택",
+                "바로 예매",
+            ),
+            disabledActions = setOf("좌석 선택", "바로 예매"),
+        )!!
+        assertEquals(emptyList<String>(), sheet.actionLabels)
+        assertNull(sheet.reserveLabel)
+    }
+
+    @Test
+    fun `입석 더하기 좌석 예매 버튼을 예매 버튼으로 인식한다`() {
+        // 실기 덤프(코레일톡 7.0.10, KTX-산천 149). 좌석 옵션 줄 없이 버튼 하나만 있다.
+        val sheet: BookingSheet = BookingSheetParser.parse(
+            listOf("KTX-산천 149", "운행 정보", "일반실", "특실", "입석+좌석 예매"),
+        )!!
+        assertEquals("149", sheet.trainNumber)
+        assertEquals("입석+좌석 예매", sheet.reserveLabel)
+    }
 }

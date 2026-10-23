@@ -42,6 +42,12 @@ object KorailUiSnapshotNotes {
         "정차하는",
     )
 
+    /**
+     * 열차 행을 탭하면 시트 위에 먼저 뜨는 안내 팝업 제목 (7.0.10, KTX-산천·이음 등).
+     * 띄어쓰기에 주의 — 예매 후 팝업과는 별개다.
+     */
+    const val ROW_NOTICE_DIALOG_TITLE: String = "이용 안내"
+
     /** 안내 팝업의 기본 동작 버튼. */
     const val CONFIRM_LABEL: String = "확인"
 

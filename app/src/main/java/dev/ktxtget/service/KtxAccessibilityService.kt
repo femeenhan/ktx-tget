@@ -48,7 +48,7 @@ import kotlinx.coroutines.withContext
  *    [KorailUiSnapshotNotes] 주석 참고.
  * 3. 「매진 → 매진 아님」 전이가 잡히면 그 행을 탭해 **바텀시트**를 연다.
  * 4. 시트는 텍스트가 정상 노출되므로, 여기서 열차번호·좌석 종류를 읽어 2차 필터를 적용한다.
- *    걸리면 뒤로 나오고, 통과하면 등급 탭을 맞춘 뒤 **「바로 예매」** 를 탭한다.
+ *    걸리면 시트를 닫고(손잡이 탭 — BACK은 코레일 홈으로 튕긴다), 통과하면 등급 탭을 맞춘 뒤 **「바로 예매」** 를 탭한다.
  * 5. 「승차권 정보 확인」 화면에 닿으면 알림을 띄우고 매크로를 멈춘다. 결제는 사용자가 한다.
  *
  * 픽셀 판정은 매진 여부까지만 구분하므로 3번은 "뭔가 풀렸다"는 신호일 뿐이고,
@@ -207,12 +207,12 @@ class KtxAccessibilityService : AccessibilityService() {
         bookingMutex.withLock {
             val sheet: BookingSheet? = awaitSheet()
             if (sheet == null) {
-                runtimeLog("sheet", "시트를 읽지 못했습니다 — 뒤로")
+                runtimeLog("sheet", "시트를 읽지 못했습니다 — 시트 닫기")
                 leaveSheet()
                 return@withLock
             }
             if (opening != null && !selectClassTab(sheet, opening)) {
-                runtimeLog("sheet", "${sheet.trainLabel} 등급 탭 전환 실패 — 뒤로")
+                runtimeLog("sheet", "${sheet.trainLabel} 등급 탭 전환 실패 — 시트 닫기")
                 leaveSheet()
                 return@withLock
             }
@@ -224,17 +224,19 @@ class KtxAccessibilityService : AccessibilityService() {
                 leaveSheet()
                 return@withLock
             }
+            // 필터를 통과했다면 활성 예매 버튼이 있다.
+            val reserveLabel: String = current.reserveLabel ?: KorailLabels.RESERVE_NOW
             val reserve: AccessibilityNodeInfo? = rootInActiveWindow?.let { root ->
-                BookingSheetReader.findActionButton(root, KorailLabels.RESERVE_NOW)
+                BookingSheetReader.findActionButton(root, reserveLabel)
             }
             if (reserve == null || !performClick(reserve)) {
-                runtimeLog("reserve", "${current.trainLabel} 「${KorailLabels.RESERVE_NOW}」 탭 실패 — 뒤로")
+                runtimeLog("reserve", "${current.trainLabel} 「$reserveLabel」 탭 실패 — 시트 닫기")
                 leaveSheet()
                 return@withLock
             }
             postReserveConfirmDeadlineUptimeMs =
                 SystemClock.uptimeMillis() + POST_RESERVE_CONFIRM_BUDGET_MS
-            runtimeLog("reserve", "${current.trainLabel} 「${KorailLabels.RESERVE_NOW}」 탭")
+            runtimeLog("reserve", "${current.trainLabel} 「$reserveLabel」 탭")
         }
     }
 
@@ -371,6 +373,10 @@ class KtxAccessibilityService : AccessibilityService() {
                     handleTicketConfirmationDetected("await_sheet")
                     return null
                 }
+                if (tryConfirmRowNotice(root)) {
+                    delay(SHEET_POLL_GAP_MS)
+                    continue
+                }
                 val sheet: BookingSheet? = BookingSheetReader.read(root)
                 if (sheet != null) {
                     return sheet
@@ -401,12 +407,71 @@ class KtxAccessibilityService : AccessibilityService() {
         return clicked
     }
 
+    /**
+     * 시트를 닫고 열차 목록으로 돌아간다.
+     *
+     * BACK은 쓰지 않는다. 코레일톡 7.0.10은 시트가 떠 있을 때 BACK을 받으면 시트를 닫지 않고
+     * 목록까지 건너뛰어 코레일 홈으로 가 버린다(실기 재현) — 「취소표를 잡는 순간 홈으로 튕긴다」의
+     * 원인이었다. 대신 시트 손잡이를 누르고, 목록으로 돌아왔는지 확인한다. 확인하지 못하면
+     * 엉뚱한 화면에서 계속 탭하지 않도록 매크로를 멈춘다.
+     */
     private suspend fun leaveSheet() {
-        withContext(Dispatchers.Main) {
-            performGlobalAction(GLOBAL_ACTION_BACK)
-        }
-        delay(BACK_SETTLE_MS)
         tracker.reset()
+        // 열차를 탭하면 시트 위에 「이용 안내」가 먼저 뜨기도 한다. 그 창이 앞에 있으면 손잡이가 안 보인다.
+        rootInActiveWindow?.let { root ->
+            if (tryConfirmRowNotice(root)) {
+                delay(ROW_NOTICE_SETTLE_MS)
+            }
+        }
+        val handle: AccessibilityNodeInfo? =
+            rootInActiveWindow?.let { root -> BookingSheetReader.findDragHandle(root) }
+        if (handle == null || !performClick(handle)) {
+            stopMacro("시트를 닫지 못해 매크로를 멈춥니다. 화면을 확인해 주세요.")
+            return
+        }
+        if (!awaitBackOnList()) {
+            stopMacro("시트를 닫은 뒤 열차 목록으로 돌아오지 못해 매크로를 멈춥니다. 화면을 확인해 주세요.")
+        }
+    }
+
+    /** 시트가 사라지고 목록의 새로고침 버튼이 다시 보이면 true. */
+    private suspend fun awaitBackOnList(): Boolean {
+        val deadline: Long = SystemClock.elapsedRealtime() + SHEET_CLOSE_BUDGET_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val root: AccessibilityNodeInfo? = rootInActiveWindow
+            if (root != null &&
+                isKorailActiveWindow(root) &&
+                !BookingSheetReader.isOpen(root) &&
+                NodeFinder.findClickableContainingText(root, KorailLabels.REFRESH) != null
+            ) {
+                return true
+            }
+            delay(SHEET_POLL_GAP_MS)
+        }
+        return false
+    }
+
+    private suspend fun stopMacro(reason: String) {
+        repository.setMacroEnabled(false)
+        runtimeLog("error", reason)
+    }
+
+    /**
+     * 열차 행을 탭하면 시트 위에 뜨는 「이용 안내」(산천 연결 운행, 경유 노선 안내 등)의 「확인」.
+     * 안내성 팝업이라 본문은 따지지 않는다. 제목 주변에서만 「확인」을 찾는다.
+     */
+    private suspend fun tryConfirmRowNotice(root: AccessibilityNodeInfo): Boolean {
+        val title: AccessibilityNodeInfo =
+            NodeFinder.findNodeByLabel(root, KorailUiSnapshotNotes.ROW_NOTICE_DIALOG_TITLE) ?: return false
+        val target: AccessibilityNodeInfo = NodeFinder.findClickableByLabelNearAnchor(
+            title,
+            KorailUiSnapshotNotes.CONFIRM_LABEL,
+        ) ?: return false
+        val clicked: Boolean = performClick(target)
+        if (clicked) {
+            runtimeLog("dialog", "열차 이용 안내 확인")
+        }
+        return clicked
     }
 
     /**
@@ -426,6 +491,9 @@ class KtxAccessibilityService : AccessibilityService() {
             return false
         }
         if (tryAutoConfirmPostReserveNotice(root)) {
+            return false
+        }
+        if (tryConfirmRowNotice(root)) {
             return false
         }
         if (settings.autoConfirmIntermediateStopDialog && tryAutoConfirmIntermediateStop(root)) {
@@ -551,7 +619,10 @@ class KtxAccessibilityService : AccessibilityService() {
         const val SHEET_WAIT_BUDGET_MS: Long = 2500L
         const val SHEET_POLL_GAP_MS: Long = 100L
         const val CLASS_TAB_SETTLE_MS: Long = 250L
-        const val BACK_SETTLE_MS: Long = 300L
+
+        /** 손잡이를 누른 뒤 시트가 닫히고 목록이 돌아오기를 기다리는 최대 시간. */
+        const val SHEET_CLOSE_BUDGET_MS: Long = 2000L
+        const val ROW_NOTICE_SETTLE_MS: Long = 300L
         const val POST_RESERVE_CONFIRM_BUDGET_MS: Long = 15_000L
 
         /** 이만큼 연속으로 새로고침조차 못 하면 매크로를 멈추고 사용자에게 알린다. */

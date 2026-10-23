@@ -83,4 +83,34 @@ class MacroFilterEngineTest {
         )
         assertEquals("자유석 제외", reason)
     }
+
+    @Test
+    fun `시트에 매진 안내가 있으면 막는다`() {
+        val reason: String? = MacroFilterEngine.rejectionReason(
+            sheet(seats = listOf("이 열차는 모든 좌석이 판매되어 예매가 불가해요."), actions = emptyList()),
+            MacroSettings.DEFAULT,
+        )
+        assertNotNull(reason)
+    }
+
+    @Test
+    fun `입석 더하기 좌석 예매 버튼만 있는 시트는 기본 설정이면 통과한다`() {
+        assertNull(
+            MacroFilterEngine.rejectionReason(
+                sheet(seats = emptyList(), actions = listOf("입석+좌석 예매")),
+                MacroSettings.DEFAULT,
+            ),
+        )
+    }
+
+    @Test
+    fun `입석 더하기 좌석 제외는 버튼 라벨로도 막는다`() {
+        val settings: MacroSettings =
+            MacroSettings.DEFAULT.copy(excludeGeneralStandingComboRows = true)
+        val combo: BookingSheet = sheet(seats = emptyList(), actions = listOf("입석+좌석 예매"))
+        assertNotNull(MacroFilterEngine.rejectionReason(combo, settings))
+        val standingOnly: MacroSettings =
+            MacroSettings.DEFAULT.copy(excludeGeneralStandingOnlyRows = true)
+        assertNull(MacroFilterEngine.rejectionReason(combo, standingOnly))
+    }
 }

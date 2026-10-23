@@ -17,11 +17,15 @@ data class BookingSheet(
     val classTabs: List<String>,
     /** 좌석 옵션 줄의 텍스트. 예: ["자유석", "1량"] */
     val seatOptionTexts: List<String>,
-    /** 하단 액션 버튼 라벨. 예: ["좌석 선택", "바로 예매"] */
+    /** 누를 수 있는(활성) 하단 액션 버튼 라벨. 예: ["좌석 선택", "바로 예매"] */
     val actionLabels: List<String>,
 ) {
     /** 필터 판정용으로 좌석 옵션을 한 덩어리로 본 문자열. */
     val seatOptionBlob: String get() = seatOptionTexts.joinToString(" ")
+
+    /** 누를 예매 버튼 라벨. 활성 예매 버튼이 없으면 null. */
+    val reserveLabel: String?
+        get() = KorailLabels.RESERVE_LABELS.firstOrNull { label: String -> actionLabels.contains(label) }
 }
 
 object BookingSheetParser {
@@ -32,6 +36,7 @@ object BookingSheetParser {
     /** 시트가 떠 있는지 판별하는 근거이자, 탭 대상 후보. */
     val ACTION_LABELS: List<String> = listOf(
         KorailLabels.RESERVE_NOW,
+        KorailLabels.RESERVE_STANDING_PLUS_SEAT,
         KorailLabels.CHOOSE_SEAT,
         KorailLabels.REQUEST_WAITLIST,
     )
@@ -45,13 +50,16 @@ object BookingSheetParser {
     /**
      * [texts]는 시트 서브트리의 text·contentDescription을 트리 순서대로 모은 것이다.
      * 액션 버튼이 하나도 없으면 시트가 아니라고 보고 null을 돌려준다.
+     * [disabledActions]는 화면에 있지만 비활성인 버튼 라벨이다 — 시트 판별에는 쓰되
+     * [BookingSheet.actionLabels]에서는 뺀다.
      */
-    fun parse(texts: List<String>): BookingSheet? {
+    fun parse(texts: List<String>, disabledActions: Set<String> = emptySet()): BookingSheet? {
         val trimmed: List<String> = texts.map { t: String -> t.trim() }.filter { it.isNotEmpty() }
-        val actions: List<String> = ACTION_LABELS.filter { label: String -> trimmed.contains(label) }
-        if (actions.isEmpty()) {
+        val present: List<String> = ACTION_LABELS.filter { label: String -> trimmed.contains(label) }
+        if (present.isEmpty()) {
             return null
         }
+        val actions: List<String> = present.filter { label: String -> label !in disabledActions }
         var label: String = ""
         var type: String = ""
         var number: String = ""
