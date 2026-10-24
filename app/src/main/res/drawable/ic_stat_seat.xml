@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 상태 표시줄용 단색 좌석 배치도. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="58"
+    android:viewportHeight="58">
+    <path
+        android:pathData="M6.5,8.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM18.5,8.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM35.5,8.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM47.5,8.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M6.5,23.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM18.5,23.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM47.5,23.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M6.5,38.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM18.5,38.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM35.5,38.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5zM47.5,38.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M35.5,23.5h4a2.5,2.5 0,0 1,2.5,2.5v6a2.5,2.5 0,0 1,-2.5,2.5h-4a2.5,2.5 0,0 1,-2.5,-2.5v-6a2.5,2.5 0,0 1,2.5,-2.5z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round" />
+</vector>

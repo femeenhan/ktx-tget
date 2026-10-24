@@ -9,57 +9,46 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Accessibility
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Train
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,17 +56,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ktxtget.R
@@ -86,13 +78,28 @@ import dev.ktxtget.domain.MacroSettings
 import dev.ktxtget.domain.SeatClickPreference
 import dev.ktxtget.domain.TicketAlertMode
 import dev.ktxtget.domain.TrainExcludeNumbersParser
+import dev.ktxtget.runtime.MacroLogLine
+import dev.ktxtget.runtime.MacroRuntimeLog
 import dev.ktxtget.service.MacroForegroundService
+import dev.ktxtget.ui.theme.DisplayFamily
+import dev.ktxtget.ui.theme.Ink
+import dev.ktxtget.ui.theme.InkDisabled
+import dev.ktxtget.ui.theme.InkMuted
+import dev.ktxtget.ui.theme.InkSecondary
+import dev.ktxtget.ui.theme.MonoFamily
+import dev.ktxtget.ui.theme.Sage
+import dev.ktxtget.ui.theme.TrackOnInk
 import dev.ktxtget.util.DeviceLicense
 import dev.ktxtget.util.DeviceRegistrationState
 import kotlinx.coroutines.launch
+import java.util.Locale
+
+private enum class MacroState { LOCKED, IDLE, RUNNING }
+
+private const val RECENT_LOG_COUNT: Int = 4
 
 @Composable
-fun MainScreen(repository: MacroPreferencesRepository) {
+fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -104,26 +111,9 @@ fun MainScreen(repository: MacroPreferencesRepository) {
     val refreshMs: Long by repository.refreshIntervalMs.collectAsStateWithLifecycle(
         initialValue = MacroPreferencesRepository.MIN_REFRESH_MS,
     )
-    var sliderValue by remember(refreshMs) { mutableFloatStateOf(refreshMs.toFloat()) }
-    LaunchedEffect(refreshMs) {
-        sliderValue = refreshMs.toFloat()
-    }
-    var excludedTrainsText by remember { mutableStateOf("") }
-    var isExcludedTrainsFieldFocused by remember { mutableStateOf(false) }
     fun dismissKeyboard() {
         focusManager.clearFocus()
         keyboardController?.hide()
-    }
-    LaunchedEffect(Unit) {
-        dismissKeyboard()
-    }
-    LaunchedEffect(settings.excludedTrainNumbers) {
-        if (!isExcludedTrainsFieldFocused) {
-            excludedTrainsText = settings.excludedTrainNumbers.sorted().joinToString(", ")
-        }
-    }
-    BackHandler(enabled = isExcludedTrainsFieldFocused) {
-        dismissKeyboard()
     }
     var registrationState by remember { mutableStateOf(DeviceLicense.getRegistrationState(context)) }
     val isMacroAllowed = registrationState == DeviceRegistrationState.LICENSED ||
@@ -134,634 +124,701 @@ fun MainScreen(repository: MacroPreferencesRepository) {
             repository.setMacroEnabled(false)
         }
     }
+    fun startMacro() {
+        scope.launch {
+            repository.setMacroEnabled(true)
+            MacroForegroundService.start(context)
+        }
+    }
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted: Boolean ->
             if (granted && isMacroAllowed) {
-                scope.launch {
-                    repository.setMacroEnabled(true)
-                    MacroForegroundService.start(context)
-                }
+                startMacro()
             }
         }
-    val minMs: Float = MacroPreferencesRepository.MIN_REFRESH_MS.toFloat()
-    val maxMs: Float = MacroPreferencesRepository.MAX_REFRESH_MS.toFloat()
-    val step: Float = MacroPreferencesRepository.REFRESH_STEP_MS.toFloat()
-    val stepCount: Int = ((maxMs - minMs) / step).toInt().coerceAtLeast(1)
-    val isMacroRunning: Boolean = macroEnabled && isMacroAllowed
+    val state: MacroState = when {
+        !isMacroAllowed -> MacroState.LOCKED
+        macroEnabled -> MacroState.RUNNING
+        else -> MacroState.IDLE
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(focusManager, keyboardController) {
-                detectTapGestures(onTap = { dismissKeyboard() })
-            }
+            .pointerTapToDismiss { dismissKeyboard() }
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
     ) {
-        HomeHeader()
-        if (registrationState == DeviceRegistrationState.UNLICENSED) {
-            LicenseActivationCard(
-                deviceId = deviceId,
-                onCopyDeviceId = { copyDeviceIdToClipboard(context, deviceId) },
-                onActivate = { inputKey ->
-                    if (DeviceLicense.verifyLicenseKey(deviceId, inputKey)) {
-                        DeviceLicense.saveLicenseKey(context, inputKey)
-                        registrationState = DeviceLicense.getRegistrationState(context)
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.license_activation_success_toast),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.license_activation_failed_toast),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                },
-            )
-        }
-        MacroStatusCard(
-            isRunning = isMacroRunning,
-            isMacroAllowed = isMacroAllowed,
-            onToggle = { checked: Boolean ->
-                if (!isMacroAllowed) {
-                    Toast.makeText(
+        HomeHeader(onOpenLog = onOpenLog)
+        StatusPill(
+            state = state,
+            onStart = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(
                         context,
-                        context.getString(R.string.license_macro_blocked),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    return@MacroStatusCard
-                }
-                if (checked) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.POST_NOTIFICATIONS,
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        scope.launch {
-                            repository.setMacroEnabled(true)
-                            MacroForegroundService.start(context)
-                        }
-                    }
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    scope.launch {
-                        repository.setMacroEnabled(false)
-                    }
+                    startMacro()
+                }
+            },
+            onStop = {
+                scope.launch {
+                    repository.setMacroEnabled(false)
                 }
             },
         )
-        QuickSetupCard(
-            onOpenAccessibilitySettings = {
-                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            },
-        )
-        TrainListScopeTipCard()
-        SettingsSectionCard(
-            title = stringResource(R.string.section_refresh),
-            description = stringResource(R.string.section_refresh_desc),
-            icon = Icons.Default.Schedule,
-        ) {
-            Text(
-                text = stringResource(
-                    R.string.refresh_interval_human_label,
-                    sliderValue / 1000f,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.refresh_interval_range_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = sliderValue,
-                onValueChange = { sliderValue = it },
-                onValueChangeFinished = {
-                    scope.launch {
-                        repository.setRefreshIntervalMs(sliderValue.toLong())
-                    }
-                },
-                valueRange = minMs..maxMs,
-                steps = (stepCount - 1).coerceAtLeast(0),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        SettingsSectionCard(
-            title = stringResource(R.string.section_seat_filters),
-            description = stringResource(R.string.section_seat_filters_desc),
-            icon = Icons.Default.FilterList,
-        ) {
-            SettingSwitchRow(
-                label = stringResource(R.string.exclude_freeseat_label),
-                checked = settings.excludeFreeseatRows,
-                onCheckedChange = { checked: Boolean ->
-                    scope.launch {
-                        repository.setExcludeFreeseatRows(checked)
-                    }
-                },
-            )
-            SectionDivider()
-            SettingSwitchRow(
-                label = stringResource(R.string.exclude_general_standing_combo_label),
-                checked = settings.excludeGeneralStandingComboRows,
-                onCheckedChange = { checked: Boolean ->
-                    scope.launch {
-                        repository.setExcludeGeneralStandingComboRows(checked)
-                    }
-                },
-            )
-            SectionDivider()
-            SettingSwitchRow(
-                label = stringResource(R.string.exclude_general_standing_only_label),
-                checked = settings.excludeGeneralStandingOnlyRows,
-                onCheckedChange = { checked: Boolean ->
-                    scope.launch {
-                        repository.setExcludeGeneralStandingOnlyRows(checked)
-                    }
-                },
-            )
-        }
-        SettingsSectionCard(
-            title = stringResource(R.string.section_train_exclude),
-            description = stringResource(R.string.section_train_exclude_desc),
-            icon = Icons.Default.Train,
-        ) {
-            OutlinedTextField(
-                value = excludedTrainsText,
-                onValueChange = { excludedTrainsText = it },
-                label = { Text(stringResource(R.string.excluded_trains_hint)) },
-                supportingText = {
-                    Text(stringResource(R.string.excluded_trains_support))
-                },
-                placeholder = {
-                    Text(text = stringResource(R.string.excluded_trains_placeholder))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { focusState ->
-                        isExcludedTrainsFieldFocused = focusState.isFocused
-                    },
-                singleLine = false,
-                minLines = 2,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { dismissKeyboard() }),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    dismissKeyboard()
-                    scope.launch {
-                        val trains: Set<String> =
-                            TrainExcludeNumbersParser.parseCommaSeparated(excludedTrainsText)
-                        repository.setExcludedTrainNumbers(trains)
-                        excludedTrainsText = trains.sorted().joinToString(", ")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.apply_filters_button))
-            }
-            SectionDivider()
-            SettingSwitchRow(
-                label = stringResource(R.string.auto_confirm_intermediate_stop_label),
-                supportingText = stringResource(R.string.auto_confirm_intermediate_stop_support),
-                checked = settings.autoConfirmIntermediateStopDialog,
-                onCheckedChange = { checked: Boolean ->
-                    scope.launch {
-                        repository.setAutoConfirmIntermediateStopDialog(checked)
-                    }
-                },
-            )
-        }
-        SettingsSectionCard(
-            title = stringResource(R.string.section_booking_options),
-            description = stringResource(R.string.section_booking_options_desc),
-            icon = Icons.Default.Notifications,
-        ) {
-            Text(
-                text = stringResource(R.string.seat_preference_label),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            SeatClickPreference.entries.forEach { opt: SeatClickPreference ->
-                SettingRadioRow(
-                    label = seatPreferenceLabel(opt),
-                    selected = settings.seatClickPreference == opt,
-                    onClick = {
-                        scope.launch {
-                            repository.setSeatClickPreference(opt)
+        when (state) {
+            MacroState.LOCKED -> {
+                Spacer(modifier = Modifier.height(14.dp))
+                LicenseCard(
+                    deviceId = deviceId,
+                    onCopyDeviceId = { copyDeviceIdToClipboard(context, deviceId) },
+                    onActivate = { inputKey ->
+                        dismissKeyboard()
+                        val ok: Boolean = DeviceLicense.verifyLicenseKey(deviceId, inputKey)
+                        if (ok) {
+                            DeviceLicense.saveLicenseKey(context, inputKey)
+                            registrationState = DeviceLicense.getRegistrationState(context)
                         }
+                        Toast.makeText(
+                            context,
+                            context.getString(
+                                if (ok) {
+                                    R.string.license_activation_success_toast
+                                } else {
+                                    R.string.license_activation_failed_toast
+                                },
+                            ),
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     },
                 )
             }
-            SectionDivider()
-            Text(
-                text = stringResource(R.string.ticket_alert_mode_label),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            TicketAlertMode.entries.forEach { mode: TicketAlertMode ->
-                SettingRadioRow(
-                    label = ticketAlertModeLabel(mode),
-                    selected = settings.ticketAlertMode == mode,
-                    onClick = {
-                        scope.launch {
-                            repository.setTicketAlertMode(mode)
-                        }
-                    },
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.ticket_alert_mode_support),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            MacroState.RUNNING -> RecentLog(onOpenLog = onOpenLog)
+            MacroState.IDLE -> Unit
         }
-        Spacer(modifier = Modifier.height(8.dp))
-    }
-}
-
-@Composable
-private fun HomeHeader() {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.main_screen_title),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.main_screen_subtitle),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun MacroStatusCard(
-    isRunning: Boolean,
-    isMacroAllowed: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    val containerColor = if (isRunning) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val contentColor = if (isRunning) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        shape = RoundedCornerShape(16.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isRunning) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                        ),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = stringResource(
-                            if (isRunning) {
-                                R.string.macro_status_running
-                            } else {
-                                R.string.macro_status_stopped
-                            },
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(
-                            if (isRunning) {
-                                R.string.macro_status_running_desc
-                            } else {
-                                R.string.macro_status_stopped_desc
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor,
-                    )
+        Spacer(modifier = Modifier.height(if (state == MacroState.RUNNING) 12.dp else 14.dp))
+        RefreshIntervalCard(
+            refreshMs = refreshMs,
+            onChange = { value: Long ->
+                scope.launch {
+                    repository.setRefreshIntervalMs(value)
                 }
-            }
-            Switch(
-                checked = isRunning,
-                onCheckedChange = onToggle,
-                enabled = isMacroAllowed,
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickSetupCard(onOpenAccessibilitySettings: () -> Unit) {
-    SettingsSectionCard(
-        title = stringResource(R.string.section_quick_setup),
-        description = stringResource(R.string.section_quick_setup_desc),
-        icon = Icons.Default.Accessibility,
-    ) {
-        Text(
-            text = stringResource(R.string.quick_setup_steps),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            },
         )
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = onOpenAccessibilitySettings,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Accessibility,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ChoiceCard(
+                title = stringResource(R.string.seat_pref_title),
+                description = stringResource(R.string.seat_pref_desc),
+                options = SeatClickPreference.entries,
+                selected = settings.seatClickPreference,
+                label = { pref: SeatClickPreference -> seatPreferenceLabel(pref) },
+                note = { pref: SeatClickPreference ->
+                    if (pref == SeatClickPreference.BOTH_PREFER_GENERAL) {
+                        stringResource(R.string.seat_pref_both_note)
+                    } else {
+                        null
+                    }
+                },
+                onSelect = { pref: SeatClickPreference ->
+                    scope.launch {
+                        repository.setSeatClickPreference(pref)
+                    }
+                },
+                modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.open_accessibility_settings))
+            ChoiceCard(
+                title = stringResource(R.string.alert_title),
+                description = stringResource(R.string.alert_desc),
+                options = TicketAlertMode.entries,
+                selected = settings.ticketAlertMode,
+                label = { mode: TicketAlertMode -> ticketAlertModeLabel(mode) },
+                note = { mode: TicketAlertMode ->
+                    if (mode == settings.ticketAlertMode) ticketAlertModeNote(mode) else null
+                },
+                onSelect = { mode: TicketAlertMode ->
+                    scope.launch {
+                        repository.setTicketAlertMode(mode)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
         }
+        Spacer(modifier = Modifier.height(26.dp))
+        SectionHeading(
+            title = stringResource(R.string.seat_filter_title),
+            description = stringResource(R.string.seat_filter_desc),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SectionRule()
+        SwitchRow(
+            title = stringResource(R.string.seat_filter_freeseat),
+            checked = settings.excludeFreeseatRows,
+            onCheckedChange = { checked: Boolean ->
+                scope.launch {
+                    repository.setExcludeFreeseatRows(checked)
+                }
+            },
+        )
+        SwitchRow(
+            title = stringResource(R.string.seat_filter_standing_combo),
+            checked = settings.excludeGeneralStandingComboRows,
+            onCheckedChange = { checked: Boolean ->
+                scope.launch {
+                    repository.setExcludeGeneralStandingComboRows(checked)
+                }
+            },
+        )
+        SwitchRow(
+            title = stringResource(R.string.seat_filter_standing_only),
+            checked = settings.excludeGeneralStandingOnlyRows,
+            onCheckedChange = { checked: Boolean ->
+                scope.launch {
+                    repository.setExcludeGeneralStandingOnlyRows(checked)
+                }
+            },
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        TrainExcludeSection(
+            trainNumbers = settings.excludedTrainNumbers,
+            onChange = { trains: Set<String> ->
+                scope.launch {
+                    repository.setExcludedTrainNumbers(trains)
+                }
+            },
+            onDone = { dismissKeyboard() },
+        )
+        Spacer(modifier = Modifier.height(26.dp))
+        SectionHeading(title = stringResource(R.string.popup_title))
+        Spacer(modifier = Modifier.height(8.dp))
+        SectionRule()
+        SwitchRow(
+            title = stringResource(R.string.intermediate_stop_title),
+            description = stringResource(R.string.intermediate_stop_desc),
+            checked = settings.autoConfirmIntermediateStopDialog,
+            onCheckedChange = { checked: Boolean ->
+                scope.launch {
+                    repository.setAutoConfirmIntermediateStopDialog(checked)
+                }
+            },
+        )
+        AccessibilityRow(
+            onOpen = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+        )
+        Spacer(modifier = Modifier.height(18.dp))
+        Text(text = stringResource(R.string.train_list_scope_note), style = CaptionStyle)
     }
 }
 
+private fun Modifier.pointerTapToDismiss(onTap: () -> Unit): Modifier =
+    this.then(
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(onTap = { onTap() })
+        },
+    )
+
 @Composable
-private fun TrainListScopeTipCard() {
-    var isExpanded by remember { mutableStateOf(false) }
-    Card(
+private fun HomeHeader(onOpenLog: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize()
-            .clickable { isExpanded = !isExpanded },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        ),
-        shape = RoundedCornerShape(12.dp),
+            .padding(top = 28.dp, bottom = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(20.dp),
+        Text(
+            text = stringResource(R.string.app_name),
+            fontFamily = DisplayFamily,
+            fontSize = 38.sp,
+            letterSpacing = (-1).sp,
+            color = Ink,
+        )
+        UnderlinedLink(text = stringResource(R.string.home_log_link), onClick = onOpenLog)
+    }
+}
+
+@Composable
+fun UnderlinedLink(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = Ink,
+            modifier = Modifier.drawBehind {
+                val y: Float = size.height + 2.dp.toPx()
+                drawLine(Ink, Offset(0f, y), Offset(size.width, y), strokeWidth = LineWidth.toPx())
+            },
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(state: MacroState, onStart: () -> Unit, onStop: () -> Unit) {
+    val shape = RoundedCornerShape(48.dp)
+    val container: Modifier = when (state) {
+        MacroState.RUNNING -> Modifier.clip(shape).background(Ink)
+        MacroState.IDLE -> Modifier.border(LineWidth, Ink, shape)
+        MacroState.LOCKED -> Modifier.dashedBorder(InkMuted, LineWidth, 48.dp)
+    }
+    val (title, description) = when (state) {
+        MacroState.RUNNING -> R.string.status_running to R.string.status_running_desc
+        MacroState.IDLE -> R.string.status_idle to R.string.status_idle_desc
+        MacroState.LOCKED -> R.string.status_locked to R.string.status_locked_desc
+    }
+    val textColor = if (state == MacroState.RUNNING) Sage else Ink
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .then(container)
+            .padding(start = 24.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = stringResource(title),
+                fontSize = 26.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.6).sp,
+                color = textColor,
+            )
+            Text(
+                text = stringResource(description),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = if (state == MacroState.RUNNING) TrackOnInk else Ink,
+            )
+        }
+        when (state) {
+            MacroState.RUNNING -> CircleAction(
+                text = stringResource(R.string.action_stop),
+                onClick = onStop,
+                modifier = Modifier.background(Sage, CircleShape),
+                textColor = Ink,
+            )
+            MacroState.IDLE -> CircleAction(
+                text = stringResource(R.string.action_start),
+                onClick = onStart,
+                modifier = Modifier.background(Ink, CircleShape),
+                textColor = Sage,
+            )
+            MacroState.LOCKED -> CircleAction(
+                text = stringResource(R.string.action_start),
+                onClick = null,
+                modifier = Modifier.dashedBorder(InkMuted, LineWidth, 35.dp),
+                textColor = InkMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CircleAction(
+    text: String,
+    onClick: (() -> Unit)?,
+    modifier: Modifier,
+    textColor: Color,
+) {
+    Box(
+        modifier = Modifier
+            .size(70.dp)
+            .clip(CircleShape)
+            .then(modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+    }
+}
+
+@Composable
+private fun RecentLog(onOpenLog: () -> Unit) {
+    val lines: List<MacroLogLine> by MacroRuntimeLog.lines.collectAsStateWithLifecycle()
+    Spacer(modifier = Modifier.height(22.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = stringResource(R.string.recent_log_title), style = LabelStyle)
+        Text(
+            text = stringResource(R.string.recent_log_all),
+            fontFamily = MonoFamily,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = Ink,
+            modifier = Modifier
+                .clickable(role = Role.Button, onClick = onOpenLog)
+                .padding(vertical = 8.dp),
+        )
+    }
+    SectionRule()
+    val recent: List<MacroLogLine> = lines.takeLast(RECENT_LOG_COUNT).asReversed()
+    if (recent.isEmpty()) {
+        Text(
+            text = stringResource(R.string.recent_log_empty),
+            style = CaptionStyle,
+            modifier = Modifier.padding(vertical = 14.dp),
+        )
+        RowDivider()
+    } else {
+        val formatter = rememberLogTimeFormatter()
+        recent.forEach { line: MacroLogLine ->
+            LogRow(line = line, formatter = formatter)
+        }
+    }
+    Spacer(modifier = Modifier.height(14.dp))
+    Text(text = stringResource(R.string.running_settings_note), style = CaptionStyle)
+}
+
+@Composable
+private fun RefreshIntervalCard(refreshMs: Long, onChange: (Long) -> Unit) {
+    val min: Long = MacroPreferencesRepository.MIN_REFRESH_MS
+    val max: Long = MacroPreferencesRepository.MAX_REFRESH_MS
+    val step: Long = MacroPreferencesRepository.REFRESH_STEP_MS
+    OutlineCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            SectionHeading(
+                title = stringResource(R.string.refresh_interval_title),
+                description = stringResource(R.string.refresh_interval_range),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StepButton(
+                    symbol = "−",
+                    description = stringResource(R.string.refresh_interval_decrease),
+                    enabled = refreshMs > min,
+                    onClick = { onChange((refreshMs - step).coerceAtLeast(min)) },
                 )
-                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.train_list_scope_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.weight(1f),
+                    text = stringResource(R.string.refresh_interval_value, formatSeconds(refreshMs)),
+                    fontFamily = MonoFamily,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = (-0.8).sp,
+                    color = Ink,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(78.dp),
                 )
-                Icon(
-                    imageVector = if (isExpanded) {
-                        Icons.Default.ExpandLess
-                    } else {
-                        Icons.Default.ExpandMore
-                    },
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-            if (isExpanded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.train_list_scope_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            } else {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.train_list_scope_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                StepButton(
+                    symbol = "+",
+                    description = stringResource(R.string.refresh_interval_increase),
+                    enabled = refreshMs < max,
+                    onClick = { onChange((refreshMs + step).coerceAtMost(max)) },
                 )
             }
         }
     }
 }
 
+/** 2000 → "2.0", 2250 → "2.25". 0.25초 단위라 소수 둘째 자리까지만 나온다. */
+private fun formatSeconds(ms: Long): String {
+    return if (ms % 100L == 0L) {
+        String.format(Locale.US, "%.1f", ms / 1000.0)
+    } else {
+        String.format(Locale.US, "%.2f", ms / 1000.0)
+    }
+}
+
 @Composable
-private fun SettingsSectionCard(
+private fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    val color = if (enabled) Ink else InkDisabled
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .border(LineWidth, color, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = symbol, fontSize = 18.sp, color = color)
+        }
+    }
+}
+
+@Composable
+private fun <T> ChoiceCard(
     title: String,
     description: String,
-    icon: ImageVector,
-    content: @Composable () -> Unit,
+    options: List<T>,
+    selected: T,
+    label: @Composable (T) -> String,
+    note: @Composable (T) -> String?,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(16.dp),
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(36.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp),
+    OutlineCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionHeading(title = title, description = description)
+            Column(modifier = Modifier.selectableGroup()) {
+                options.forEach { option: T ->
+                    val isSelected: Boolean = option == selected
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = { onSelect(option) },
+                            )
+                            .padding(vertical = 3.dp),
+                    ) {
+                        Text(
+                            text = label(option),
+                            fontSize = 20.sp,
+                            lineHeight = 26.sp,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                            color = if (isSelected) Ink else InkDisabled,
                         )
+                        val noteText: String? = note(option)
+                        if (noteText != null) {
+                            Text(
+                                text = noteText,
+                                fontSize = 12.sp,
+                                color = if (isSelected) InkSecondary else InkDisabled,
+                            )
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            content()
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SectionDivider() {
-    Spacer(modifier = Modifier.height(12.dp))
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    Spacer(modifier = Modifier.height(12.dp))
-}
-
-@Composable
-private fun SettingSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    supportingText: String? = null,
-    enabled: Boolean = true,
+private fun TrainExcludeSection(
+    trainNumbers: Set<String>,
+    onChange: (Set<String>) -> Unit,
+    onDone: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(text = label, style = MaterialTheme.typography.bodyLarge)
-            if (supportingText != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    var input by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+    val fieldLabel: String = stringResource(R.string.train_exclude_title)
+    fun add() {
+        val normalized: String? = TrainExcludeNumbersParser.normalizeToken(input.trim())
+        if (normalized == null) {
+            showError = input.isNotBlank()
+            return
+        }
+        onChange(trainNumbers + normalized)
+        input = ""
+        showError = false
+        onDone()
+    }
+    SectionHeading(
+        title = stringResource(R.string.train_exclude_title),
+        description = stringResource(R.string.train_exclude_desc),
+    )
+    if (trainNumbers.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(10.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            trainNumbers.sortedBy { it.toIntOrNull() ?: Int.MAX_VALUE }.forEach { number: String ->
+                TrainChip(number = number, onRemove = { onChange(trainNumbers - number) })
             }
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled,
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BasicTextField(
+            value = input,
+            onValueChange = { value: String ->
+                input = value.filter { it.isDigit() }.take(4)
+                showError = false
+            },
+            singleLine = true,
+            textStyle = TextStyle(fontFamily = MonoFamily, fontSize = 15.sp, color = Ink),
+            cursorBrush = SolidColor(Ink),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { add() }),
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .border(LineWidth, Ink, CircleShape)
+                .semantics { contentDescription = fieldLabel },
+            decorationBox = { inner ->
+                Box(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (input.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.train_exclude_placeholder),
+                            fontSize = 15.sp,
+                            color = InkMuted,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        InkButton(text = stringResource(R.string.train_exclude_add), onClick = { add() })
+    }
+    if (showError) {
+        Text(
+            text = stringResource(R.string.train_exclude_invalid),
+            style = CaptionStyle,
+            modifier = Modifier.padding(top = 6.dp, start = 16.dp),
         )
     }
 }
 
 @Composable
-private fun SettingRadioRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun TrainChip(number: String, onRemove: () -> Unit) {
+    val removeLabel: String = stringResource(R.string.train_exclude_remove, number)
+    Row(
+        modifier = Modifier
+            .height(34.dp)
+            .border(LineWidth, Ink, CircleShape)
+            .padding(start = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = number, fontFamily = MonoFamily, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Ink)
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onRemove)
+                .semantics { contentDescription = removeLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = "×", fontSize = 15.sp, color = Ink)
+        }
+    }
+}
+
+@Composable
+private fun AccessibilityRow(onOpen: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .selectable(
-                selected = selected,
-                role = Role.RadioButton,
-                onClick = onClick,
-            )
-            .padding(vertical = 6.dp),
+            .heightIn(min = 58.dp)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = null,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 4.dp),
-        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = stringResource(R.string.accessibility_title), fontSize = 16.sp, color = Ink)
+            Text(text = stringResource(R.string.accessibility_desc), style = CaptionStyle)
+        }
+        LineButton(text = stringResource(R.string.accessibility_open), onClick = onOpen)
     }
+    RowDivider()
 }
 
 @Composable
-private fun LicenseActivationCard(
+private fun LicenseCard(
     deviceId: String,
     onCopyDeviceId: () -> Unit,
     onActivate: (String) -> Unit,
 ) {
     var licenseKeyInput by remember { mutableStateOf("") }
-    Card(
+    OutlineCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-        ),
-        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(18.dp),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = stringResource(R.string.license_activation_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(text = stringResource(R.string.license_activation_title), style = LabelStyle)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(text = stringResource(R.string.license_device_id_label), style = CaptionStyle)
+                    Text(
+                        text = deviceId.ifEmpty { "—" },
+                        fontFamily = MonoFamily,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Ink,
+                    )
+                }
+                LineButton(text = stringResource(R.string.license_copy_short), onClick = onCopyDeviceId)
+            }
             Text(
                 text = stringResource(R.string.license_activation_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = InkSecondary,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.license_device_id_label),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = deviceId.ifEmpty { "—" },
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = onCopyDeviceId,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.license_device_id_copy_button))
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = licenseKeyInput,
-                onValueChange = { licenseKeyInput = it },
-                label = { Text(stringResource(R.string.license_key_hint)) },
-                placeholder = { Text("XXXX-XXXX-XXXX-XXXX") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onActivate(licenseKeyInput) }),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = { onActivate(licenseKeyInput) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.license_activate_button))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(text = stringResource(R.string.license_key_hint), style = CaptionStyle)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    BasicTextField(
+                        value = licenseKeyInput,
+                        onValueChange = { licenseKeyInput = it },
+                        singleLine = true,
+                        textStyle = TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = Ink),
+                        cursorBrush = SolidColor(Ink),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { onActivate(licenseKeyInput) }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .border(BorderStroke(LineWidth, Ink), CircleShape),
+                        decorationBox = { inner ->
+                            Box(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                if (licenseKeyInput.isEmpty()) {
+                                    Text(
+                                        text = "XXXX-XXXX-XXXX-XXXX",
+                                        fontFamily = MonoFamily,
+                                        fontSize = 14.sp,
+                                        color = InkMuted,
+                                    )
+                                }
+                                inner()
+                            }
+                        },
+                    )
+                    InkButton(
+                        text = stringResource(R.string.license_activate_button),
+                        onClick = { onActivate(licenseKeyInput) },
+                    )
+                }
             }
         }
     }
@@ -781,9 +838,18 @@ private fun copyDeviceIdToClipboard(context: Context, deviceId: String) {
 @Composable
 private fun ticketAlertModeLabel(mode: TicketAlertMode): String {
     return when (mode) {
-        TicketAlertMode.OFF -> stringResource(R.string.ticket_alert_mode_off)
-        TicketAlertMode.NORMAL -> stringResource(R.string.ticket_alert_mode_normal)
-        TicketAlertMode.STRONG -> stringResource(R.string.ticket_alert_mode_strong)
+        TicketAlertMode.OFF -> stringResource(R.string.alert_off)
+        TicketAlertMode.NORMAL -> stringResource(R.string.alert_normal)
+        TicketAlertMode.STRONG -> stringResource(R.string.alert_strong)
+    }
+}
+
+@Composable
+private fun ticketAlertModeNote(mode: TicketAlertMode): String {
+    return when (mode) {
+        TicketAlertMode.OFF -> stringResource(R.string.alert_off_note)
+        TicketAlertMode.NORMAL -> stringResource(R.string.alert_normal_note)
+        TicketAlertMode.STRONG -> stringResource(R.string.alert_strong_note)
     }
 }
 
@@ -792,6 +858,6 @@ private fun seatPreferenceLabel(pref: SeatClickPreference): String {
     return when (pref) {
         SeatClickPreference.GENERAL_ONLY -> stringResource(R.string.seat_pref_general_only)
         SeatClickPreference.FIRST_CLASS_ONLY -> stringResource(R.string.seat_pref_first_only)
-        SeatClickPreference.BOTH_PREFER_GENERAL -> stringResource(R.string.seat_pref_both_general)
+        SeatClickPreference.BOTH_PREFER_GENERAL -> stringResource(R.string.seat_pref_both)
     }
 }
