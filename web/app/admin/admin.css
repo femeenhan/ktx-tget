@@ -1,0 +1,9 @@
+.admin { font-family: sans-serif; padding: 16px; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 16px; }
+.admin-header nav a { margin-right: 16px; }
+.pending-count { font-size: 1.4rem; font-weight: bold; margin: 0 0 12px; }
+.admin table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.admin th, .admin td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
+.admin td.actions > * { margin-right: 4px; }
+.badge { background: #fde68a; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+.row-error { color: crimson; margin: 4px 0 0; }

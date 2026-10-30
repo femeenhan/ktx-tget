@@ -144,13 +144,14 @@ export function createNeonRepo(): Repo {
   };
 }
 
-let memory: Repo | undefined;
+// Next는 라우트마다 번들이 달라 모듈 변수가 공유되지 않는다. REPO=memory 스모크 테스트용으로 globalThis에 둔다.
+const g = globalThis as { __tgetMemoryRepo?: Repo };
 
 export function getRepo(): Repo {
-  if (process.env.REPO === 'memory') return (memory ??= createMemoryRepo());
+  if (process.env.REPO === 'memory') return (g.__tgetMemoryRepo ??= createMemoryRepo());
   return createNeonRepo();
 }
 
 export function resetRepoForTests(): void {
-  memory = createMemoryRepo();
+  g.__tgetMemoryRepo = createMemoryRepo();
 }
