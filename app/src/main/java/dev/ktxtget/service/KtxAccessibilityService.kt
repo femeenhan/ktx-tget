@@ -205,9 +205,11 @@ class KtxAccessibilityService : AccessibilityService() {
             "${if (s.generalSoldOut) 'X' else 'o'}${if (s.premiumSoldOut) 'X' else 'o'}"
         })
 
-        val candidate: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
+        // 전이가 보이면 확인 판독 없이 바로 탭한다. 덜 그려진 화면을 찍어 생기는 오판은
+        // 시트에서 「매진」으로 걸러지므로 잘못 사지는 않고, 그 대신 취소표를 잡는 순간의
+        // 0.4초를 아낀다 — 사용자 관측상 글자 지연은 드물어 이쪽이 이득이다.
+        val opening: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
             ?: return
-        val opening: SeatOpening = confirmOpening(rects, candidate, settings) ?: return
         val target: AccessibilityNodeInfo = rowNodes.getOrNull(opening.rowIndex) ?: return
         runtimeLog("open", "${opening.rowIndex + 1}번째 행 ${columnLabel(opening)} 매진 해제 — 시트 열기")
         if (!performClick(target)) {
@@ -307,38 +309,6 @@ class KtxAccessibilityService : AccessibilityService() {
             delay(ROWS_POLL_GAP_MS)
         }
         return false
-    }
-
-    /**
-     * 전이 후보가 나왔을 때만 한 번 더 읽어 확인한다.
-     *
-     * 목록이 다시 그려지는 도중에 캡처하면 매진 글자가 아직 없어 「매진이 풀렸다」로 오인한다.
-     * 실기에서 실제로 관측된 오판독이고, 그대로 두면 엉뚱한 행을 탭한다. 예전에는 매 주기
-     * 두 번씩 읽었는데, 전이가 없는 대부분의 주기에서 캡처 한 번과 대기 [SENSE_CONFIRM_GAP_MS]를
-     * 그냥 버리는 셈이라 후보가 있을 때만 확인한다.
-     *
-     * 두 번째 판독에서도 그 칸이 비매진이면 확정. 다시 매진으로 읽히면 첫 판독이 흔들린 것이므로
-     * 두 번째 판독을 기준선으로 다시 관측시켜(매진 방향은 전이가 아니다) 이번 주기는 버린다.
-     */
-    private suspend fun confirmOpening(
-        rects: List<PixelRect>,
-        candidate: SeatOpening,
-        settings: MacroSettings,
-    ): SeatOpening? {
-        delay(SENSE_CONFIRM_GAP_MS)
-        val second: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
-            runtimeLog("sense", "확인 판독 실패 — 이번 주기 건너뜀")
-            tracker.reset()
-            return null
-        }
-        val stillOpen: Boolean =
-            second.getOrNull(candidate.rowIndex)?.soldOutAt(candidate.column) == false
-        if (!stillOpen) {
-            runtimeLog("sense", "판독이 흔들려 이번 주기는 건너뜁니다 (화면 갱신 중)")
-            tracker.observe(rects, second, settings.seatClickPreference)
-            return null
-        }
-        return candidate
     }
 
     /**
@@ -639,9 +609,6 @@ class KtxAccessibilityService : AccessibilityService() {
 
         /** 새로고침 직후 로딩 자리표시자가 나타나기를 지켜보는 시간. */
         const val LOADING_APPEAR_BUDGET_MS: Long = 700L
-
-        /** 후보가 나왔을 때 확인 판독까지의 간격. takeScreenshot 최소 간격(333ms)보다 커야 한다. */
-        const val SENSE_CONFIRM_GAP_MS: Long = 380L
 
         /** 주기가 간격보다 오래 걸렸어도 다음 새로고침 전에 최소한 이만큼은 쉰다. */
         const val MIN_CYCLE_GAP_MS: Long = 150L
