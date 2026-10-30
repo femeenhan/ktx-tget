@@ -73,4 +73,21 @@ class LicenseDecisionTest {
     fun deviceClockSetBackAfterCheck_isStillLicensed() {
         assertTrue(LicenseDecision.isLicensed(snap(checkedAtWall = now + hour), now))
     }
+
+    @Test
+    fun checkedExactly72HoursAgo_isNotLicensed() {
+        assertFalse(LicenseDecision.isLicensed(snap(checkedAtWall = now - 72 * hour), now))
+    }
+
+    @Test
+    fun checked71h59mAgo_isLicensed() {
+        val minute: Long = 60L * 1000
+        assertTrue(LicenseDecision.isLicensed(snap(checkedAtWall = now - 72 * hour + minute), now))
+    }
+
+    @Test
+    fun expiresExactlyAtServerNow_isNotLicensed() {
+        // serverTime == checkedAtWall이므로 서버 기준 현재 == now.
+        assertFalse(LicenseDecision.isLicensed(snap(expiresAt = now), now))
+    }
 }

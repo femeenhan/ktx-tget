@@ -46,8 +46,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         NotificationHelper.stopUserAlert(this)
+        LicenseManager.refreshInBackground(this)
         lifecycleScope.launch {
-            LicenseManager.refresh(this@MainActivity)
             if (!DeviceLicense.isLicensed(this@MainActivity)) {
                 if (repository.readMacroEnabled()) {
                     repository.setMacroEnabled(false)

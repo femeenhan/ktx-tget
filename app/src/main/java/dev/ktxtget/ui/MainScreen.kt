@@ -89,7 +89,10 @@ import dev.ktxtget.ui.theme.InkSecondary
 import dev.ktxtget.ui.theme.MonoFamily
 import dev.ktxtget.ui.theme.Sage
 import dev.ktxtget.ui.theme.TrackOnInk
+import dev.ktxtget.BuildConfig
+import dev.ktxtget.license.LicenseDecision
 import dev.ktxtget.license.LicenseManager
+import dev.ktxtget.license.LicenseSnapshot
 import dev.ktxtget.util.DeviceLicense
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -115,12 +118,9 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
         focusManager.clearFocus()
         keyboardController?.hide()
     }
-    var licensed by remember { mutableStateOf(DeviceLicense.isLicensed(context)) }
-    LaunchedEffect(Unit) {
-        LicenseManager.refresh(context)
-        licensed = DeviceLicense.isLicensed(context)
-    }
-    val isMacroAllowed = licensed
+    val licenseSnapshot: LicenseSnapshot? by LicenseManager.snapshot.collectAsStateWithLifecycle()
+    val isMacroAllowed: Boolean =
+        BuildConfig.DEBUG || LicenseDecision.isLicensed(licenseSnapshot, System.currentTimeMillis())
     val deviceId: String = remember { DeviceLicense.readDeviceId(context) }
     LaunchedEffect(isMacroAllowed, macroEnabled) {
         if (!isMacroAllowed && macroEnabled) {

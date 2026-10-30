@@ -22,41 +22,45 @@ class LicenseApi(baseUrl: String) {
             .put("agreed", true)
         val (code, text) = call("POST", "/api/device/request", body.toString())
         if (code !in 200..299) throw LicenseApiException(code, errorMessage(code, text))
-        return parseSnapshot(text)
+        return parsing { parseSnapshot(text) }
     }
 
     suspend fun status(deviceId: String, versionCode: Int): LicenseSnapshot {
         val query = "deviceId=${enc(deviceId)}&versionCode=$versionCode"
         val (code, text) = call("GET", "/api/device/status?$query", null)
         if (code !in 200..299) throw LicenseApiException(code, errorMessage(code, text))
-        return parseSnapshot(text)
+        return parsing { parseSnapshot(text) }
     }
 
     suspend fun config(): AppConfig {
         val (code, text) = call("GET", "/api/config", null)
         if (code !in 200..299) throw LicenseApiException(code, errorMessage(code, text))
-        val json = JSONObject(text)
-        val prices: JSONObject = json.getJSONObject("prices")
-        return AppConfig(
-            priceLifetime = prices.getLong("lifetime"),
-            priceMonth = prices.getLong("month"),
-            priceYear = prices.getLong("year"),
-            bankAccount = json.getString("bankAccount"),
-            openchatUrl = json.getString("openchatUrl"),
-            termsUrl = json.getString("termsUrl"),
-        )
+        return parsing {
+            val json = JSONObject(text)
+            val prices: JSONObject = json.getJSONObject("prices")
+            AppConfig(
+                priceLifetime = prices.getLong("lifetime"),
+                priceMonth = prices.getLong("month"),
+                priceYear = prices.getLong("year"),
+                bankAccount = json.getString("bankAccount"),
+                openchatUrl = json.getString("openchatUrl"),
+                termsUrl = json.getString("termsUrl"),
+            )
+        }
     }
 
     suspend fun version(): VersionInfo? {
         val (code, text) = call("GET", "/api/version", null)
         if (code == 404) return null
         if (code !in 200..299) throw LicenseApiException(code, errorMessage(code, text))
-        val json = JSONObject(text)
-        return VersionInfo(
-            versionCode = json.getInt("versionCode"),
-            versionName = json.getString("versionName"),
-            url = json.getString("url"),
-        )
+        return parsing {
+            val json = JSONObject(text)
+            VersionInfo(
+                versionCode = json.getInt("versionCode"),
+                versionName = json.getString("versionName"),
+                url = json.getString("url"),
+            )
+        }
     }
 
     private suspend fun call(method: String, path: String, jsonBody: String?): Pair<Int, String> =
@@ -83,9 +87,20 @@ class LicenseApi(baseUrl: String) {
 
     private fun errorMessage(code: Int, text: String): String =
         try {
-            JSONObject(text).optString("error").ifEmpty { "HTTP $code" }
+            val json = JSONObject(text)
+            if (json.isNull("error")) "HTTP $code" else json.optString("error").ifEmpty { "HTTP $code" }
         } catch (_: Exception) {
             "HTTP $code"
+        }
+
+    /** 응답 형식이 어긋나면(JSONException, DateTimeParseException 등) IOException으로 바꿔 던진다. */
+    private inline fun <T> parsing(block: () -> T): T =
+        try {
+            block()
+        } catch (err: IOException) {
+            throw err
+        } catch (err: Exception) {
+            throw IOException("invalid response: ${err.message ?: err.javaClass.simpleName}", err)
         }
 
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")

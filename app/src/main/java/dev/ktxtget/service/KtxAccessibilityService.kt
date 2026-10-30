@@ -102,15 +102,10 @@ class KtxAccessibilityService : AccessibilityService() {
         macroLoopJob?.cancel()
         macroLoopJob = scope.launch {
             var previouslyEnabled = false
-            var lastLicenseRefreshElapsedMs: Long? = null
             while (isActive) {
                 try {
-                    val nowElapsed: Long = SystemClock.elapsedRealtime()
-                    val last: Long? = lastLicenseRefreshElapsedMs
-                    if (last == null || nowElapsed - last >= REFRESH_LICENSE_MS) {
-                        lastLicenseRefreshElapsedMs = nowElapsed
-                        withContext(Dispatchers.IO) { LicenseManager.refresh(applicationContext) }
-                    }
+                    // 기다리지 않는다. 판정은 저장값으로 하고, 서버가 죽어도 유예 기간 동안 계속 돈다.
+                    LicenseManager.refreshInBackgroundIfDue(applicationContext, REFRESH_LICENSE_MS)
                     val enabled: Boolean = repository.readMacroEnabled()
                     if (enabled && !previouslyEnabled) {
                         ticketConfirmationHandled.set(false)
