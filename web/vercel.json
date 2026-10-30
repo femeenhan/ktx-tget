@@ -1,1 +1,4 @@
-{ "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 18 * * *" }] }
+{
+  "regions": ["sin1"],
+  "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 18 * * *" }]
+}
