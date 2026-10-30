@@ -375,8 +375,18 @@ class KtxAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * 시트가 뜨고 **좌석 조회까지 끝나기를** 기다린다.
+     *
+     * 시트는 제목과 버튼 틀이 먼저 그려지고 좌석 조회가 끝나야 버튼이 활성화된다. 그 사이를
+     * 읽으면 활성 버튼이 없어 필터가 "예매 버튼 없음"으로 거절해 버린다 — 실기에서 좌석이 풀린
+     * 행을 열고도 그대로 닫고 새로고침으로 돌아간 원인. 그래서 [BookingSheet.isSettled]가 될
+     * 때까지 폴링하고, 시간 안에 결론이 안 나면 마지막으로 읽은 시트를 그대로 돌려준다
+     * (필터가 이유를 기록한다).
+     */
     private suspend fun awaitSheet(): BookingSheet? {
         val deadline: Long = SystemClock.elapsedRealtime() + SHEET_WAIT_BUDGET_MS
+        var lastSheet: BookingSheet? = null
         while (SystemClock.elapsedRealtime() < deadline) {
             val root: AccessibilityNodeInfo? = rootInActiveWindow
             if (root != null && isKorailActiveWindow(root)) {
@@ -390,12 +400,18 @@ class KtxAccessibilityService : AccessibilityService() {
                 }
                 val sheet: BookingSheet? = BookingSheetReader.read(root)
                 if (sheet != null) {
-                    return sheet
+                    if (sheet.isSettled) {
+                        return sheet
+                    }
+                    lastSheet = sheet
                 }
             }
             delay(SHEET_POLL_GAP_MS)
         }
-        return null
+        if (lastSheet != null) {
+            runtimeLog("sheet", "${lastSheet.trainLabel} 좌석 조회가 ${SHEET_WAIT_BUDGET_MS}ms 안에 끝나지 않았습니다")
+        }
+        return lastSheet
     }
 
     /** 시트가 목표 등급 탭을 보고 있게 만든다. 이미 맞으면 아무것도 하지 않는다. */
@@ -605,6 +621,7 @@ class KtxAccessibilityService : AccessibilityService() {
     }
 
     private fun runtimeLog(kind: String, detail: String) {
+        Log.i(TAG, "[$kind] $detail")
         try {
             MacroRuntimeLog.emit(kind, detail)
         } catch (_: Throwable) {

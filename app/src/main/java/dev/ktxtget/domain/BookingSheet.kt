@@ -26,6 +26,17 @@ data class BookingSheet(
     /** 누를 예매 버튼 라벨. 활성 예매 버튼이 없으면 null. */
     val reserveLabel: String?
         get() = KorailLabels.RESERVE_LABELS.firstOrNull { label: String -> actionLabels.contains(label) }
+
+    /**
+     * 시트가 좌석 조회를 끝내고 결론이 난 상태인지.
+     *
+     * 시트는 열리자마자 제목과 버튼 틀이 먼저 그려지고, 좌석 조회가 끝날 때까지 버튼이 전부
+     * 비활성이다. 그 순간을 읽으면 활성 버튼이 하나도 없어 "예매 버튼 없음"으로 잘못 거절한다
+     * (실기: 좌석이 풀린 행을 열고도 1초 안에 건너뛴 뒤 새로고침으로 돌아감). 활성 버튼이
+     * 하나라도 생기거나 매진 안내가 뜨면 결론이 난 것이다.
+     */
+    val isSettled: Boolean
+        get() = actionLabels.isNotEmpty() || seatOptionBlob.contains(KorailLabels.SHEET_SOLD_OUT_NOTICE)
 }
 
 object BookingSheetParser {

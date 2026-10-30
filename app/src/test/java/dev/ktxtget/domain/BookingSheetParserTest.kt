@@ -1,6 +1,7 @@
 package dev.ktxtget.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -112,5 +113,25 @@ class BookingSheetParserTest {
         )!!
         assertEquals("149", sheet.trainNumber)
         assertEquals("입석+좌석 예매", sheet.reserveLabel)
+    }
+
+    @Test
+    fun `버튼이 전부 비활성이고 매진 안내도 없으면 아직 조회 중이다`() {
+        val loading: BookingSheet = BookingSheetParser.parse(
+            listOf("KTX-산천 277", "일반실", "특실", "좌석 선택", "바로 예매"),
+            disabledActions = setOf("좌석 선택", "바로 예매"),
+        )!!
+        assertFalse(loading.isSettled)
+
+        val ready: BookingSheet = BookingSheetParser.parse(
+            listOf("KTX-산천 277", "일반실", "특실", "좌석 선택", "바로 예매"),
+        )!!
+        assertTrue(ready.isSettled)
+
+        val soldOut: BookingSheet = BookingSheetParser.parse(
+            listOf("KTX-산천 277", "모든 좌석이 판매되어 예매할 수 없습니다", "좌석 선택", "바로 예매"),
+            disabledActions = setOf("좌석 선택", "바로 예매"),
+        )!!
+        assertTrue(soldOut.isSettled)
     }
 }
