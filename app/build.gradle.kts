@@ -14,11 +14,15 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-val licenseSecret: String = (
-    project.findProperty("licenseSecret") as String?
-        ?: localProperties.getProperty("licenseSecret")
-        ?: "ktxtget-default-secret"
+val apiBaseUrl: String = (
+    localProperties.getProperty("apiBaseUrl") ?: "https://tget.bigseasons.co.kr"
     ).trim()
+
+val releaseSigningKeys = listOf("keystorePath", "keystorePassword", "keyAlias", "keyPassword")
+val hasReleaseSigning = releaseSigningKeys.all { !localProperties.getProperty(it).isNullOrBlank() }
+if (!hasReleaseSigning) {
+    logger.warn("WARNING: release signing keys missing in local.properties; falling back to debug signing.")
+}
 
 android {
     namespace = "dev.ktxtget"
@@ -30,12 +34,24 @@ android {
         versionCode = 2
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "LICENSE_SECRET", "\"$licenseSecret\"")
+        // TODO(Task 9): remove with DeviceLicense rewrite
+        buildConfigField("String", "LICENSE_SECRET", "\"removed\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(localProperties.getProperty("keystorePath").trim())
+                storePassword = localProperties.getProperty("keystorePassword").trim()
+                keyAlias = localProperties.getProperty("keyAlias").trim()
+                keyPassword = localProperties.getProperty("keyPassword").trim()
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseSigning) "release" else "debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

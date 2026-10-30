@@ -46,6 +46,10 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 
 - GitHub: [https://github.com/femeenhan/ktx-tget](https://github.com/femeenhan/ktx-tget)
 
+## release 서명
+
+`~/keystores/ktxtget-release.jks`와 `local.properties`의 `keystorePassword`/`keyPassword`는 함께 백업하세요. 둘 중 하나라도 잃으면 같은 서명으로 업데이트를 배포할 수 없습니다. 설정 키는 `local.properties.example`을 참고하고, `scripts/build_preview_apk.sh`로 `dist/ktx-tget-<버전>.apk`를 만듭니다.
+
 ## 라이선스
 
 미정 — 필요 시 `LICENSE` 파일을 추가하세요.

@@ -1,7 +1,11 @@
 ## Android SDK path (Android Studio default shown)
 sdk.dir=/path/to/Android/sdk
 
-## License secret used to generate and verify buyer license keys.
-## Keep this value private — do not commit to git.
-## Must match the value used in generate_key.sh.
-# licenseSecret=your_secret_here
+## Release signing (keep private — do not commit; back up the keystore AND these passwords together)
+keystorePath=/Users/you/keystores/ktxtget-release.jks
+keystorePassword=your_store_password
+keyAlias=ktxtget
+keyPassword=your_key_password
+
+## Optional: override the license server base URL
+# apiBaseUrl=https://tget.bigseasons.co.kr
