@@ -117,21 +117,32 @@ class KtxAccessibilityService : AccessibilityService() {
                         delay(POLL_WHEN_DISABLED_MS)
                         continue
                     }
+                    val cycleStart: Long = SystemClock.elapsedRealtime()
                     runMacroCycle()
+                    delay(remainingInterval(cycleStart))
                 } catch (err: CancellationException) {
                     throw err
                 } catch (err: Exception) {
                     Log.e(TAG, "macro cycle failed", err)
                     runtimeLog("error", err.message ?: err.javaClass.simpleName)
+                    delay(POLL_WHEN_DISABLED_MS)
                 }
-                delay(
-                    repository.readRefreshIntervalMs().coerceIn(
-                        MacroPreferencesRepository.MIN_REFRESH_MS,
-                        MacroPreferencesRepository.MAX_REFRESH_MS,
-                    ),
-                )
             }
         }
+    }
+
+    /**
+     * 새로고침 간격은 **주기 시작 시점 기준**이다. 한 주기(새로고침→목록 복귀→판독)에 이미
+     * 1초 남짓 걸리므로, 그 뒤에 간격을 통째로 더 쉬면 실제 간격이 설정값보다 1초 이상 길어진다.
+     * 주기에 쓴 시간을 빼고 남은 만큼만 쉰다. 다만 코레일에 연타하지 않도록 최소 쉼은 둔다.
+     */
+    private suspend fun remainingInterval(cycleStartElapsedMs: Long): Long {
+        val interval: Long = repository.readRefreshIntervalMs().coerceIn(
+            MacroPreferencesRepository.MIN_REFRESH_MS,
+            MacroPreferencesRepository.MAX_REFRESH_MS,
+        )
+        val spent: Long = SystemClock.elapsedRealtime() - cycleStartElapsedMs
+        return (interval - spent).coerceAtLeast(MIN_CYCLE_GAP_MS)
     }
 
     override fun onDestroy() {
@@ -184,12 +195,19 @@ class KtxAccessibilityService : AccessibilityService() {
         runtimeLog("refresh", "새로고침 탭")
         val rowNodes: List<AccessibilityNodeInfo> = awaitRows() ?: return
         val rects: List<PixelRect> = TrainRowLocator.rectsOf(rowNodes)
-        val signals: List<SoldOutSignal> = readSoldOutTwice(rects) ?: return
+        val signals: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
+            runtimeLog("sense", "화면 판독 실패 — 이번 주기 건너뜀")
+            return
+        }
         val soldOutCount: Int = signals.count { s: SoldOutSignal -> s.generalSoldOut || s.premiumSoldOut }
         runtimeLog("parse", "행 ${rects.size}개 (매진 포함 ${soldOutCount}개)")
+        Log.i(TAG, "signals=" + signals.joinToString(",") { s: SoldOutSignal ->
+            "${if (s.generalSoldOut) 'X' else 'o'}${if (s.premiumSoldOut) 'X' else 'o'}"
+        })
 
-        val opening: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
+        val candidate: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
             ?: return
+        val opening: SeatOpening = confirmOpening(rects, candidate, settings) ?: return
         val target: AccessibilityNodeInfo = rowNodes.getOrNull(opening.rowIndex) ?: return
         runtimeLog("open", "${opening.rowIndex + 1}번째 행 ${columnLabel(opening)} 매진 해제 — 시트 열기")
         if (!performClick(target)) {
@@ -292,27 +310,35 @@ class KtxAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * 같은 화면을 두 번 읽어 결과가 일치할 때만 신호로 인정한다.
+     * 전이 후보가 나왔을 때만 한 번 더 읽어 확인한다.
      *
      * 목록이 다시 그려지는 도중에 캡처하면 매진 글자가 아직 없어 「매진이 풀렸다」로 오인한다.
-     * 실기에서 실제로 관측된 오판독이고, 그대로 두면 엉뚱한 행을 탭해 예매까지 갈 수 있다.
-     * 두 판독이 어긋나면 이번 주기는 버린다 — 취소표를 한 주기 놓치는 쪽이 잘못 사는 쪽보다 낫다.
+     * 실기에서 실제로 관측된 오판독이고, 그대로 두면 엉뚱한 행을 탭한다. 예전에는 매 주기
+     * 두 번씩 읽었는데, 전이가 없는 대부분의 주기에서 캡처 한 번과 대기 [SENSE_CONFIRM_GAP_MS]를
+     * 그냥 버리는 셈이라 후보가 있을 때만 확인한다.
+     *
+     * 두 번째 판독에서도 그 칸이 비매진이면 확정. 다시 매진으로 읽히면 첫 판독이 흔들린 것이므로
+     * 두 번째 판독을 기준선으로 다시 관측시켜(매진 방향은 전이가 아니다) 이번 주기는 버린다.
      */
-    private suspend fun readSoldOutTwice(rects: List<PixelRect>): List<SoldOutSignal>? {
-        val first: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
-            runtimeLog("sense", "화면 판독 실패 — 이번 주기 건너뜀")
-            return null
-        }
+    private suspend fun confirmOpening(
+        rects: List<PixelRect>,
+        candidate: SeatOpening,
+        settings: MacroSettings,
+    ): SeatOpening? {
         delay(SENSE_CONFIRM_GAP_MS)
         val second: List<SoldOutSignal> = sensor.readSoldOut(rects) ?: run {
-            runtimeLog("sense", "화면 판독 실패 — 이번 주기 건너뜀")
+            runtimeLog("sense", "확인 판독 실패 — 이번 주기 건너뜀")
+            tracker.reset()
             return null
         }
-        if (first != second) {
+        val stillOpen: Boolean =
+            second.getOrNull(candidate.rowIndex)?.soldOutAt(candidate.column) == false
+        if (!stillOpen) {
             runtimeLog("sense", "판독이 흔들려 이번 주기는 건너뜁니다 (화면 갱신 중)")
+            tracker.observe(rects, second, settings.seatClickPreference)
             return null
         }
-        return second
+        return candidate
     }
 
     /**
@@ -614,8 +640,11 @@ class KtxAccessibilityService : AccessibilityService() {
         /** 새로고침 직후 로딩 자리표시자가 나타나기를 지켜보는 시간. */
         const val LOADING_APPEAR_BUDGET_MS: Long = 700L
 
-        /** 판독을 한 번 더 해 비교하기까지의 간격. takeScreenshot 최소 간격(333ms)보다 커야 한다. */
+        /** 후보가 나왔을 때 확인 판독까지의 간격. takeScreenshot 최소 간격(333ms)보다 커야 한다. */
         const val SENSE_CONFIRM_GAP_MS: Long = 380L
+
+        /** 주기가 간격보다 오래 걸렸어도 다음 새로고침 전에 최소한 이만큼은 쉰다. */
+        const val MIN_CYCLE_GAP_MS: Long = 150L
         const val SHEET_WAIT_BUDGET_MS: Long = 2500L
         const val SHEET_POLL_GAP_MS: Long = 100L
         const val CLASS_TAB_SETTLE_MS: Long = 250L

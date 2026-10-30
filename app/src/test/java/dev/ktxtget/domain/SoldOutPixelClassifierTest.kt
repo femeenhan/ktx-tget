@@ -15,8 +15,11 @@ class SoldOutPixelClassifierTest {
         const val WIDTH: Int = 1080
         const val HEIGHT: Int = 2640
 
-        /** 매진 글자색. */
+        /** 매진 글자색 (코레일톡 7.0.2 실측). */
         const val SOLD_OUT_RED: Int = 0xFFFF5359.toInt()
+
+        /** 매진 글자색 (코레일톡 7.1.0 실측, 2026-10-30 SM-F731N). 7.0.x보다 진하고 어둡다. */
+        const val SOLD_OUT_RED_710: Int = 0xFFDF1B35.toInt()
 
         /** 「마감임박」 모래시계 이모지 — 매진과 완전히 같은 색이라 위치로만 구분된다. */
         const val HOURGLASS_RED: Int = 0xFFFF5359.toInt()
@@ -70,10 +73,21 @@ class SoldOutPixelClassifierTest {
     @Test
     fun `매진 글자색만 참으로 판정한다`() {
         assertTrue(SoldOutPixelClassifier.isSoldOutRed(SOLD_OUT_RED))
+        assertTrue(SoldOutPixelClassifier.isSoldOutRed(SOLD_OUT_RED_710))
         assertFalse(SoldOutPixelClassifier.isSoldOutRed(REWARD_BADGE))
         assertFalse(SoldOutPixelClassifier.isSoldOutRed(DISCOUNT_GREEN))
         assertFalse(SoldOutPixelClassifier.isSoldOutRed(BACKGROUND))
         assertFalse(SoldOutPixelClassifier.isSoldOutRed(0xFFFFFFFF.toInt()))
+    }
+
+    @Test
+    fun `7_1_0의 진한 빨강도 매진으로 잡는다`() {
+        // 7.1.0에서 매진 색이 (223,27,53)으로 바뀌어 기존 범위(g 56~124)에 걸리지 않았고,
+        // 그 탓에 모든 행이 「매진 아님」으로 읽혀 매크로가 전이를 한 번도 못 잡았다(실기).
+        val image: IntArray = blankImage()
+        paint(image, SOLD_OUT_RED_710, 900, 850, 1030, 890)
+        paint(image, SOLD_OUT_RED_710, 900, 1000, 1030, 1040)
+        assertEquals(SoldOutSignal(generalSoldOut = true, premiumSoldOut = true), classify(image))
     }
 
     @Test

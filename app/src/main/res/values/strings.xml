@@ -36,7 +36,7 @@
     <string name="recent_log_empty">아직 기록이 없습니다</string>
     <string name="running_settings_note">설정은 실행 중에도 바꿀 수 있고, 다음 새로고침부터 적용됩니다.</string>
     <string name="refresh_interval_title">새로고침 간격</string>
-    <string name="refresh_interval_range">2.0~3.0초, 0.25초 단위</string>
+    <string name="refresh_interval_range">1.5~3.0초, 0.25초 단위 (한 주기 소요 시간 포함)</string>
     <string name="refresh_interval_value">%1$ss</string>
     <string name="refresh_interval_decrease">간격 줄이기</string>
     <string name="refresh_interval_increase">간격 늘리기</string>

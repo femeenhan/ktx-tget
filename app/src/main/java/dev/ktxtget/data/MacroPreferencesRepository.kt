@@ -174,7 +174,7 @@ class MacroPreferencesRepository(
 
     companion object {
         private const val REFRESH_DEFAULT_MS: Long = 2500L
-        const val MIN_REFRESH_MS: Long = 2000L
+        const val MIN_REFRESH_MS: Long = 1500L
         const val MAX_REFRESH_MS: Long = 3000L
         const val REFRESH_STEP_MS: Long = 250L
     }
