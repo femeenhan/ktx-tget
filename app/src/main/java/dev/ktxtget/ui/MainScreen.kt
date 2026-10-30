@@ -308,6 +308,10 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
         AccessibilityRow(
             onOpen = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
         )
+        Spacer(modifier = Modifier.height(26.dp))
+        DisplayShrinkSection(
+            onCopy = { command: String -> copyCommandToClipboard(context, command) },
+        )
         Spacer(modifier = Modifier.height(18.dp))
         Text(text = stringResource(R.string.train_list_scope_note), style = CaptionStyle)
     }
@@ -741,6 +745,78 @@ private fun AccessibilityRow(onOpen: () -> Unit) {
         LineButton(text = stringResource(R.string.accessibility_open), onClick = onOpen)
     }
     RowDivider()
+}
+
+/**
+ * adb로 시스템 DPI를 낮춰 한 화면에 더 많은 열차 행을 넣는 방법. 설정 앱 최소값(420)보다
+ * 더 내릴 수 있는 유일한 경로라 잊지 않도록 앱 안에 적어 둔다. 명령은 복사해서 PC에서 실행한다.
+ */
+@Composable
+private fun DisplayShrinkSection(onCopy: (String) -> Unit) {
+    SectionHeading(
+        title = stringResource(R.string.display_shrink_title),
+        description = stringResource(R.string.display_shrink_desc),
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    SectionRule()
+    CommandRow(
+        title = stringResource(R.string.display_shrink_apply_title),
+        description = stringResource(R.string.display_shrink_apply_desc),
+        command = stringResource(R.string.display_shrink_apply_command),
+        onCopy = onCopy,
+    )
+    CommandRow(
+        title = stringResource(R.string.display_shrink_reset_title),
+        description = stringResource(R.string.display_shrink_reset_desc),
+        command = stringResource(R.string.display_shrink_reset_command),
+        onCopy = onCopy,
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    Text(text = stringResource(R.string.display_shrink_note), style = CaptionStyle)
+}
+
+@Composable
+private fun CommandRow(
+    title: String,
+    description: String,
+    command: String,
+    onCopy: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(text = title, fontSize = 16.sp, color = Ink)
+            Text(text = description, style = CaptionStyle)
+            Text(
+                text = command,
+                fontFamily = MonoFamily,
+                fontSize = 13.sp,
+                color = Ink,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        LineButton(
+            text = stringResource(R.string.display_shrink_copy),
+            onClick = { onCopy(command) },
+        )
+    }
+    RowDivider()
+}
+
+private fun copyCommandToClipboard(context: Context, command: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
+    clipboard?.setPrimaryClip(ClipData.newPlainText("adb_command", command))
+    Toast.makeText(
+        context,
+        context.getString(R.string.display_shrink_copied_toast),
+        Toast.LENGTH_SHORT,
+    ).show()
 }
 
 @Composable

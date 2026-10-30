@@ -71,6 +71,17 @@
     <string name="accessibility_title">접근성 권한</string>
     <string name="accessibility_desc">처음 한 번 ktx-tget을 켜 주세요</string>
     <string name="accessibility_open">설정 열기</string>
+    <string name="display_shrink_title">화면 축소</string>
+    <string name="display_shrink_desc">선택 사항. 시스템 DPI를 낮추면 한 화면에 더 많은 열차가 들어옵니다</string>
+    <string name="display_shrink_apply_title">적용 (DPI 340)</string>
+    <string name="display_shrink_apply_desc">플립5 기준 5개 행이 7개 행으로 늘어납니다</string>
+    <string name="display_shrink_apply_command">adb shell wm density 340</string>
+    <string name="display_shrink_reset_title">원복</string>
+    <string name="display_shrink_reset_desc">예매가 끝나면 되돌립니다</string>
+    <string name="display_shrink_reset_command">adb shell wm density reset</string>
+    <string name="display_shrink_copy">복사</string>
+    <string name="display_shrink_copied_toast">명령을 복사했습니다</string>
+    <string name="display_shrink_note">USB 디버깅을 켠 뒤 PC 터미널에서 실행합니다. 루트와 재부팅은 필요 없고 재부팅해도 유지됩니다. 설정 앱의 화면 크기 최소값(420)보다 더 내리는 방법이며, 300 아래로 내리면 행 높이가 너무 작아져 매크로가 목록을 읽지 못할 수 있습니다.</string>
     <string name="train_list_scope_note">화면에 보이는 열차만 감지합니다. 원하는 시간대 열차가 목록 맨 위에 오도록 코레일톡에서 출발 시각을 맞춰 두세요.</string>
     <string name="switch_on">ON</string>
     <string name="switch_off">OFF</string>
