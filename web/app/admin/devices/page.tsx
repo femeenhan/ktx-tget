@@ -1,23 +1,20 @@
-import { computeStatus, type DeviceRow, type DeviceStatus } from '../../../lib/license';
 import { getRepo } from '../../../lib/repo';
+import { countPending, isRenewal, sortDevices } from './device-list';
 import { DeviceRowView } from './device-row';
 import { formatKst } from '../format';
 import { PLAN_LABEL, STATUS_LABEL } from './labels';
 
 export const dynamic = 'force-dynamic';
 
-const ORDER: Record<DeviceStatus, number> = { pending: 0, active: 1, expired: 2, revoked: 2 };
-
 export default async function DevicesPage() {
   const now = new Date();
-  const items = (await getRepo().devices.list())
-    .map((row: DeviceRow) => ({ row, status: computeStatus(row, now) }))
-    .sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.row.requestedAt.getTime() - a.row.requestedAt.getTime());
-  const pending = items.filter((i) => i.status === 'pending').length;
+  const rows = await getRepo().devices.list();
+  const items = sortDevices(rows, now);
+  const { pending, renewal } = countPending(rows, now);
 
   return (
     <>
-      <p className="pending-count">대기 {pending}건</p>
+      <p className="pending-count">대기 {pending} · 연장 {renewal}</p>
       <table>
         <thead>
           <tr>
@@ -26,21 +23,25 @@ export default async function DevicesPage() {
           </tr>
         </thead>
         <tbody>
-          {items.map(({ row, status }) => (
+          {items.map((item) => {
+            const { row, status } = item;
+            const renew = isRenewal(item);
+            return (
             <DeviceRowView
               key={row.deviceId}
               id={row.deviceId}
               status={status}
               statusLabel={STATUS_LABEL[status]}
-              requestedAt={formatKst(row.requestedAt)}
+              requestedAt={formatKst(renew ? row.agreedAt : row.requestedAt)}
               depositor={row.depositor ?? ''}
-              requestedPlanLabel={PLAN_LABEL[row.requestedPlan]}
+              requestedPlanLabel={renew && row.pendingPlan ? `연장: ${PLAN_LABEL[row.pendingPlan]}` : PLAN_LABEL[row.requestedPlan]}
               requestedPlan={row.requestedPlan}
               pendingPlan={row.pendingPlan}
               expiresAt={status === 'pending' || status === 'revoked' ? '-' : row.expiresAt ? formatKst(row.expiresAt) : '영구'}
               note={row.note ?? ''}
             />
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </>

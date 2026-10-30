@@ -43,7 +43,7 @@ export function DeviceRowView(p: Props) {
       <td title={p.id}>{p.id.slice(0, 6)}</td>
       <td>
         {p.statusLabel}
-        {p.status === 'active' && p.pendingPlan && <> <span className="badge">연장 요청</span></>}
+        {(p.status === 'active' || p.status === 'expired') && p.pendingPlan && <> <span className="badge">연장 요청</span></>}
       </td>
       <td>{p.expiresAt}</td>
       <td>
