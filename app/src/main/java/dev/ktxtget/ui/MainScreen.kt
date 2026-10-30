@@ -11,7 +11,6 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -92,9 +91,15 @@ import dev.ktxtget.ui.theme.TrackOnInk
 import dev.ktxtget.BuildConfig
 import dev.ktxtget.license.LicenseDecision
 import dev.ktxtget.license.LicenseManager
+import dev.ktxtget.license.AppConfig
 import dev.ktxtget.license.LicenseSnapshot
+import dev.ktxtget.license.LicenseStatus
+import dev.ktxtget.license.VersionInfo
 import dev.ktxtget.util.DeviceLicense
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.util.Locale
 
 private enum class MacroState { LOCKED, IDLE, RUNNING }
@@ -122,6 +127,63 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
     val isMacroAllowed: Boolean =
         BuildConfig.DEBUG || LicenseDecision.isLicensed(licenseSnapshot, System.currentTimeMillis())
     val deviceId: String = remember { DeviceLicense.readDeviceId(context) }
+    // 카드는 DEBUG와 무관하게 서버 상태를 따른다. 매크로 허용(isMacroAllowed)과는 따로 본다.
+    val licenseUi: LicenseStatus = licenseSnapshot?.status ?: LicenseStatus.NONE
+    var config: AppConfig? by remember { mutableStateOf(null) }
+    var versionInfo: VersionInfo? by remember { mutableStateOf(null) }
+    var submitting: Boolean by remember { mutableStateOf(false) }
+    var requestError: String? by remember { mutableStateOf(null) }
+    var checking: Boolean by remember { mutableStateOf(false) }
+    var showRenew: Boolean by remember { mutableStateOf(false) }
+    val networkError: String = stringResource(R.string.license_network_error)
+    fun loadConfig() {
+        scope.launch { config = runCatching { LicenseManager.fetchConfig() }.getOrNull() }
+    }
+    LaunchedEffect(Unit) {
+        config = runCatching { LicenseManager.fetchConfig() }.getOrNull()
+    }
+    LaunchedEffect(Unit) {
+        versionInfo = try {
+            LicenseManager.fetchVersion()
+        } catch (_: IOException) {
+            null
+        }
+    }
+    LaunchedEffect(licenseUi == LicenseStatus.PENDING) {
+        if (licenseUi != LicenseStatus.PENDING) return@LaunchedEffect
+        while (isActive) {
+            delay(60_000)
+            LicenseManager.refresh(context)
+        }
+    }
+    LaunchedEffect(licenseSnapshot?.renewalPending, licenseUi) {
+        if (licenseSnapshot?.renewalPending == true || licenseUi != LicenseStatus.ACTIVE) showRenew = false
+    }
+    LaunchedEffect(licenseUi) { requestError = null }
+    fun submitRequest(depositor: String, plan: String) {
+        dismissKeyboard()
+        scope.launch {
+            submitting = true
+            try {
+                LicenseManager.sendRequest(context, depositor.trim(), plan)
+                requestError = null
+            } catch (e: IOException) {
+                requestError = e.message ?: networkError
+            } finally {
+                submitting = false
+            }
+        }
+    }
+    fun checkNow() {
+        scope.launch {
+            checking = true
+            try {
+                LicenseManager.refresh(context)
+            } finally {
+                checking = false
+            }
+        }
+    }
     LaunchedEffect(isMacroAllowed, macroEnabled) {
         if (!isMacroAllowed && macroEnabled) {
             repository.setMacroEnabled(false)
@@ -151,6 +213,12 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
     ) {
+        val notice: String? = licenseSnapshot?.notice
+        if (!notice.isNullOrBlank()) NoticeRow(text = notice)
+        val update: VersionInfo? = versionInfo
+        if (update != null && update.versionCode > BuildConfig.VERSION_CODE) {
+            UpdateBanner(versionName = update.versionName, onDownload = { openUrl(context, update.url) })
+        }
         HomeHeader(onOpenLog = onOpenLog)
         StatusPill(
             state = state,
@@ -172,16 +240,51 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
                 }
             },
         )
-        when (state) {
-            MacroState.LOCKED -> {
+        when (licenseUi) {
+            LicenseStatus.NONE, LicenseStatus.EXPIRED, LicenseStatus.REVOKED -> {
                 Spacer(modifier = Modifier.height(14.dp))
-                LicenseCard(
+                ActivationRequestCard(
+                    config = config,
+                    status = licenseUi,
+                    onSubmit = ::submitRequest,
+                    submitting = submitting,
+                    error = requestError,
+                    onReloadConfig = ::loadConfig,
                     deviceId = deviceId,
-                    onCopyDeviceId = { copyDeviceIdToClipboard(context, deviceId) },
-                    // TODO(Task 10): 서버 신청 UI로 교체. 키 입력은 더 이상 쓰지 않는다.
-                    onActivate = { dismissKeyboard() },
                 )
             }
+            LicenseStatus.PENDING -> {
+                Spacer(modifier = Modifier.height(14.dp))
+                PendingCard(config = config, onCheck = ::checkNow, checking = checking)
+            }
+            LicenseStatus.ACTIVE -> {
+                val snap: LicenseSnapshot? = licenseSnapshot
+                if (snap != null && shouldShowExpiryLine(snap, System.currentTimeMillis())) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    ExpiryLine(
+                        snapshot = snap,
+                        nowWallMs = System.currentTimeMillis(),
+                        onRenew = { showRenew = !showRenew },
+                        renewOpen = showRenew,
+                    )
+                    if (showRenew) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ActivationRequestCard(
+                            config = config,
+                            status = LicenseStatus.EXPIRED,
+                            onSubmit = ::submitRequest,
+                            submitting = submitting,
+                            error = requestError,
+                            onReloadConfig = ::loadConfig,
+                            deviceId = deviceId,
+                            title = stringResource(R.string.license_request_title_renew),
+                        )
+                    }
+                }
+            }
+        }
+        when (state) {
+            MacroState.LOCKED -> Unit
             MacroState.RUNNING -> RecentLog(onOpenLog = onOpenLog)
             MacroState.IDLE -> Unit
         }
@@ -801,98 +904,6 @@ private fun copyCommandToClipboard(context: Context, command: String) {
     Toast.makeText(
         context,
         context.getString(R.string.display_shrink_copied_toast),
-        Toast.LENGTH_SHORT,
-    ).show()
-}
-
-@Composable
-private fun LicenseCard(
-    deviceId: String,
-    onCopyDeviceId: () -> Unit,
-    onActivate: (String) -> Unit,
-) {
-    var licenseKeyInput by remember { mutableStateOf("") }
-    OutlineCard(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(18.dp),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(text = stringResource(R.string.license_activation_title), style = LabelStyle)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(text = stringResource(R.string.license_device_id_label), style = CaptionStyle)
-                    Text(
-                        text = deviceId.ifEmpty { "—" },
-                        fontFamily = MonoFamily,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Ink,
-                    )
-                }
-                LineButton(text = stringResource(R.string.license_copy_short), onClick = onCopyDeviceId)
-            }
-            Text(
-                text = stringResource(R.string.license_activation_body),
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                color = InkSecondary,
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(text = stringResource(R.string.license_key_hint), style = CaptionStyle)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    BasicTextField(
-                        value = licenseKeyInput,
-                        onValueChange = { licenseKeyInput = it },
-                        singleLine = true,
-                        textStyle = TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = Ink),
-                        cursorBrush = SolidColor(Ink),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { onActivate(licenseKeyInput) }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .border(BorderStroke(LineWidth, Ink), CircleShape),
-                        decorationBox = { inner ->
-                            Box(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.CenterStart,
-                            ) {
-                                if (licenseKeyInput.isEmpty()) {
-                                    Text(
-                                        text = "XXXX-XXXX-XXXX-XXXX",
-                                        fontFamily = MonoFamily,
-                                        fontSize = 14.sp,
-                                        color = InkMuted,
-                                    )
-                                }
-                                inner()
-                            }
-                        },
-                    )
-                    InkButton(
-                        text = stringResource(R.string.license_activate_button),
-                        onClick = { onActivate(licenseKeyInput) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun copyDeviceIdToClipboard(context: Context, deviceId: String) {
-    if (deviceId.isEmpty()) return
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
-    clipboard?.setPrimaryClip(ClipData.newPlainText("device_id", deviceId))
-    Toast.makeText(
-        context,
-        context.getString(R.string.license_device_id_copied_toast),
         Toast.LENGTH_SHORT,
     ).show()
 }

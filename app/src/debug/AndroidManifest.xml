@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 빌드만: 로컬 개발 서버(http://<맥 IP>:3000)에 붙기 위해 평문 HTTP를 허용한다. release는 https만. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>
