@@ -22,6 +22,8 @@ export interface Repo {
     delete(id: string): Promise<void>;
     /** lastSeenAt/appVersion만 갱신 (appVersion null이면 기존 값 유지). 다른 컬럼은 건드리지 않는다. */
     touch(id: string, now: Date, appVersion: number | null): Promise<void>;
+    /** depositor만 null로. 다른 컬럼은 건드리지 않는다. */
+    clearDepositor(ids: string[]): Promise<void>;
   };
   releases: {
     latest(): Promise<ReleaseRow | null>;
@@ -100,6 +102,10 @@ export function createNeonRepo(): Repo {
       async touch(id, now, appVersion) {
         await sql`update devices set last_seen_at = ${now}, app_version = coalesce(${appVersion}::int, app_version)
           where device_id = ${id}`;
+      },
+      async clearDepositor(ids) {
+        if (ids.length === 0) return;
+        await sql`update devices set depositor = null where device_id = any(${ids})`;
       },
     },
     releases: {

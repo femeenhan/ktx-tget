@@ -9,5 +9,5 @@ export async function GET(req: Request) {
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
-  return Response.json({ cleared: await runCleanup(getRepo(), new Date()) });
+  return Response.json(await runCleanup(getRepo(), new Date()));
 }
