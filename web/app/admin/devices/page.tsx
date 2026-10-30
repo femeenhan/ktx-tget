@@ -1,7 +1,8 @@
 import { computeStatus, type DeviceRow, type DeviceStatus } from '../../../lib/license';
 import { getRepo } from '../../../lib/repo';
 import { DeviceRowView } from './device-row';
-import { formatKst, PLAN_LABEL, STATUS_LABEL } from './labels';
+import { formatKst } from '../format';
+import { PLAN_LABEL, STATUS_LABEL } from './labels';
 
 export const dynamic = 'force-dynamic';
 

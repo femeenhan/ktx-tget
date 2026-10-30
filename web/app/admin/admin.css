@@ -7,3 +7,5 @@
 .admin td.actions > * { margin-right: 4px; }
 .badge { background: #fde68a; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
 .row-error { color: crimson; margin: 4px 0 0; }
+.upload-form { margin-bottom: 24px; }
+.saved { color: green; }
