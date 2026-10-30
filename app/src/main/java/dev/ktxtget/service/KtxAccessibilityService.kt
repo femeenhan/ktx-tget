@@ -19,6 +19,7 @@ import dev.ktxtget.domain.PixelRect
 import dev.ktxtget.domain.SeatOpening
 import dev.ktxtget.domain.SoldOutSignal
 import dev.ktxtget.domain.SoldOutTransitionTracker
+import dev.ktxtget.license.LicenseManager
 import dev.ktxtget.runtime.MacroRuntimeLog
 import dev.ktxtget.sensing.ScreenshotTrainListSensor
 import dev.ktxtget.sensing.TrainListSensor
@@ -92,6 +93,7 @@ class KtxAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         Log.i(TAG, "KtxAccessibilityService connected")
         runtimeLog("service", "접근성 서비스 연결됨")
+        LicenseManager.init(applicationContext)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             runtimeLog("error", "안드로이드 11 미만에서는 화면 판독을 쓸 수 없습니다")
         }
@@ -100,8 +102,15 @@ class KtxAccessibilityService : AccessibilityService() {
         macroLoopJob?.cancel()
         macroLoopJob = scope.launch {
             var previouslyEnabled = false
+            var lastLicenseRefreshElapsedMs: Long? = null
             while (isActive) {
                 try {
+                    val nowElapsed: Long = SystemClock.elapsedRealtime()
+                    val last: Long? = lastLicenseRefreshElapsedMs
+                    if (last == null || nowElapsed - last >= REFRESH_LICENSE_MS) {
+                        lastLicenseRefreshElapsedMs = nowElapsed
+                        withContext(Dispatchers.IO) { LicenseManager.refresh(applicationContext) }
+                    }
                     val enabled: Boolean = repository.readMacroEnabled()
                     if (enabled && !previouslyEnabled) {
                         ticketConfirmationHandled.set(false)
@@ -631,6 +640,9 @@ class KtxAccessibilityService : AccessibilityService() {
     private companion object {
         const val TAG: String = "KtxA11y"
         const val POLL_WHEN_DISABLED_MS: Long = 400L
+
+        /** 서버 라이선스 상태를 다시 확인하는 간격. */
+        const val REFRESH_LICENSE_MS: Long = 30L * 60 * 1000
 
         /** 새로고침 후 목록이 돌아올 때까지 기다리는 최대 시간. */
         const val ROWS_WAIT_BUDGET_MS: Long = 4000L

@@ -34,8 +34,6 @@ android {
         versionCode = 2
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // TODO(Task 9): remove with DeviceLicense rewrite
-        buildConfigField("String", "LICENSE_SECRET", "\"removed\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
     signingConfigs {

@@ -89,8 +89,8 @@ import dev.ktxtget.ui.theme.InkSecondary
 import dev.ktxtget.ui.theme.MonoFamily
 import dev.ktxtget.ui.theme.Sage
 import dev.ktxtget.ui.theme.TrackOnInk
+import dev.ktxtget.license.LicenseManager
 import dev.ktxtget.util.DeviceLicense
-import dev.ktxtget.util.DeviceRegistrationState
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -115,9 +115,12 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
         focusManager.clearFocus()
         keyboardController?.hide()
     }
-    var registrationState by remember { mutableStateOf(DeviceLicense.getRegistrationState(context)) }
-    val isMacroAllowed = registrationState == DeviceRegistrationState.LICENSED ||
-        registrationState == DeviceRegistrationState.DEV_OPEN
+    var licensed by remember { mutableStateOf(DeviceLicense.isLicensed(context)) }
+    LaunchedEffect(Unit) {
+        LicenseManager.refresh(context)
+        licensed = DeviceLicense.isLicensed(context)
+    }
+    val isMacroAllowed = licensed
     val deviceId: String = remember { DeviceLicense.readDeviceId(context) }
     LaunchedEffect(isMacroAllowed, macroEnabled) {
         if (!isMacroAllowed && macroEnabled) {
@@ -175,25 +178,8 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
                 LicenseCard(
                     deviceId = deviceId,
                     onCopyDeviceId = { copyDeviceIdToClipboard(context, deviceId) },
-                    onActivate = { inputKey ->
-                        dismissKeyboard()
-                        val ok: Boolean = DeviceLicense.verifyLicenseKey(deviceId, inputKey)
-                        if (ok) {
-                            DeviceLicense.saveLicenseKey(context, inputKey)
-                            registrationState = DeviceLicense.getRegistrationState(context)
-                        }
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                if (ok) {
-                                    R.string.license_activation_success_toast
-                                } else {
-                                    R.string.license_activation_failed_toast
-                                },
-                            ),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    },
+                    // TODO(Task 10): 서버 신청 UI로 교체. 키 입력은 더 이상 쓰지 않는다.
+                    onActivate = { dismissKeyboard() },
                 )
             }
             MacroState.RUNNING -> RecentLog(onOpenLog = onOpenLog)

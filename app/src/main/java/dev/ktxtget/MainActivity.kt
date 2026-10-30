@@ -10,6 +10,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import dev.ktxtget.data.MacroPreferencesRepository
+import dev.ktxtget.license.LicenseManager
 import dev.ktxtget.service.MacroForegroundService
 import dev.ktxtget.ui.KtxtgetApp
 import dev.ktxtget.ui.theme.KtxtgetTheme
@@ -24,6 +25,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LicenseManager.init(this)
         stopTicketAlertIfRequested()
         enableEdgeToEdge()
         setContent {
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         NotificationHelper.stopUserAlert(this)
         lifecycleScope.launch {
+            LicenseManager.refresh(this@MainActivity)
             if (!DeviceLicense.isLicensed(this@MainActivity)) {
                 if (repository.readMacroEnabled()) {
                     repository.setMacroEnabled(false)
