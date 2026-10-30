@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { SiteShell } from './components/SiteShell';
-import { contactHref, formatPrice, loadSettings } from './components/site-data';
+import { contactHref, externalProps, formatPrice, loadSettings } from './components/site-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +38,7 @@ export default async function Home() {
           </p>
           <div className="btn-row">
             <Link href="/download" className="btn btn-primary">APK 다운로드</Link>
-            <a href={contact} className="btn btn-secondary" target="_blank" rel="noopener noreferrer">오픈채팅 문의</a>
+            <a href={contact} className="btn btn-secondary" {...externalProps(contact)}>오픈채팅 문의</a>
           </div>
         </div>
       </section>

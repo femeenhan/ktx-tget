@@ -1,9 +1,30 @@
-import { getRepo } from '../../lib/repo';
+import { getRepo, type ReleaseRow } from '../../lib/repo';
 
 export const CONTACT_EMAIL = 'bigseasons.dev@gmail.com';
 
+/** DB 장애여도 공개 페이지는 떠야 하므로 실패하면 빈 설정(가격은 「문의」)으로 대신한다. */
 export async function loadSettings(): Promise<Record<string, string>> {
-  return getRepo().settings.all();
+  try {
+    return await getRepo().settings.all();
+  } catch (e) {
+    console.error('loadSettings failed', e);
+    return {};
+  }
+}
+
+/** 「릴리스 없음」(release null, error false)과 DB 오류(error true)를 구분한다. */
+export async function loadLatestRelease(): Promise<{ release: ReleaseRow | null; error: boolean }> {
+  try {
+    return { release: await getRepo().releases.latest(), error: false };
+  } catch (e) {
+    console.error('loadLatestRelease failed', e);
+    return { release: null, error: true };
+  }
+}
+
+/** http(s) 링크만 새 창으로 연다. mailto:는 그대로. */
+export function externalProps(href: string): { target?: '_blank'; rel?: string } {
+  return /^https?:\/\//.test(href) ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 }
 
 /** 오픈채팅 링크가 비어 있으면 이메일로 대신한다. */

@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getRepo } from '../../lib/repo';
 import { SiteShell } from '../components/SiteShell';
-import { contactHref, formatKstDate, formatMb } from '../components/site-data';
+import { contactHref, externalProps, formatKstDate, formatMb, loadLatestRelease, loadSettings } from '../components/site-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,8 +55,8 @@ function Install() {
 }
 
 export default async function DownloadPage() {
-  const repo = getRepo();
-  const [settings, release] = await Promise.all([repo.settings.all(), repo.releases.latest()]);
+  const [settings, { release, error }] = await Promise.all([loadSettings(), loadLatestRelease()]);
+  const contact = contactHref(settings);
 
   return (
     <SiteShell settings={settings}>
@@ -81,8 +80,10 @@ export default async function DownloadPage() {
               </>
             ) : (
               <>
-                <span className="btn btn-disabled btn-block" aria-disabled="true">준비 중</span>
-                <p className="release-meta"><span>첫 버전을 올리는 중입니다. 잠시 뒤 다시 와 주세요.</span></p>
+                <span className="btn btn-disabled btn-block" aria-disabled="true">{error ? '확인할 수 없음' : '준비 중'}</span>
+                <p className="release-meta" role={error ? 'status' : undefined}>
+                  <span>{error ? '지금은 확인할 수 없습니다. 잠시 뒤 다시 시도해 주세요.' : '첫 버전을 올리는 중입니다. 잠시 뒤 다시 와 주세요.'}</span>
+                </p>
               </>
             )}
           </div>
@@ -123,7 +124,7 @@ export default async function DownloadPage() {
           </div>
           <p className="muted small" style={{ marginTop: 16 }}>
             문제가 있으면{' '}
-            <a href={contactHref(settings)} className="text-link" target="_blank" rel="noopener noreferrer">오픈채팅</a>
+            <a href={contact} className="text-link" {...externalProps(contact)}>오픈채팅</a>
             으로 화면을 캡처해 보내 주세요.
           </p>
         </div>

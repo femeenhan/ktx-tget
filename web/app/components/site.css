@@ -57,6 +57,7 @@
   min-height: 52px; padding: 0 26px; border-radius: 999px;
   font-size: 16px; font-weight: 600; text-decoration: none; text-align: center;
   border: 1px solid var(--ink); transition: background-color .15s, color .15s;
+  font-family: inherit; cursor: pointer;
 }
 .btn-primary { background: var(--ink); color: var(--sage) !important; }
 .btn-primary:hover { background: #33362f; }
@@ -166,6 +167,6 @@
 .footer-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 18px; font-size: 14px; color: var(--ink); }
 .footer-links a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .biz { display: flex; flex-wrap: wrap; gap: 4px 18px; }
-.biz > div { display: flex; gap: 6px; }
+.biz > div { display: flex; gap: 6px; min-width: 0; }
 .biz dd { color: var(--ink); }
-.biz dd { white-space: nowrap; }
+.biz dd.nowrap { white-space: nowrap; }

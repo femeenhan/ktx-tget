@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteShell } from '../components/SiteShell';
-import { contactHref, loadSettings } from '../components/site-data';
+import { contactHref, externalProps, loadSettings } from '../components/site-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,6 @@ const SETTINGS: [string, string][] = [
 export default async function GuidePage() {
   const settings = await loadSettings();
   const contact = contactHref(settings);
-  const ext = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
   return (
     <SiteShell settings={settings}>
@@ -129,7 +128,7 @@ export default async function GuidePage() {
           <h2 id="h-device">7. 기기를 바꿨을 때</h2>
           <p>
             휴대폰을 바꾸거나 초기화하면 기기 ID가 바뀌어 라이선스가 따라가지 않습니다. 새 기기에서 앱을 열고 카드 아래쪽의 기기 ID를{' '}
-            <a href={contact} className="text-link" {...ext}>오픈채팅</a>으로 알려 주세요. 기존 라이선스를 회수하고 새 기기를 승인해 드립니다.
+            <a href={contact} className="text-link" {...externalProps(contact)}>오픈채팅</a>으로 알려 주세요. 기존 라이선스를 회수하고 새 기기를 승인해 드립니다.
           </p>
           <p className="muted small">같은 휴대폰에서 앱을 지웠다가 다시 설치한 경우에는 그대로 풀립니다.</p>
         </section>

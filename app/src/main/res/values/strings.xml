@@ -93,7 +93,7 @@
     <string name="license_plan_label">기간</string>
     <string name="license_plan_month">1개월</string>
     <string name="license_plan_year">1년</string>
-    <string name="license_plan_lifetime">평생</string>
+    <string name="license_plan_lifetime">영구</string>
     <string name="license_price_won">%1$s원</string>
     <string name="license_price_ask">문의</string>
     <string name="license_account_label">입금 계좌</string>
