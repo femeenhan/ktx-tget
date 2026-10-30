@@ -145,7 +145,11 @@ describe('extend', () => {
     expect(r.expiresAt).toEqual(d('2026-05-01T00:00:00Z'));
     expect(r.pendingPlan).toBeNull();
     expect(r.status).toBe('active');
-    expect(r.approvedAt).toEqual(d('2026-01-02T00:00:00Z'));
+    expect(r.approvedAt).toEqual(NOW);
+  });
+  it('extend sets approvedAt to now', () => {
+    const r = extend(row({ status: 'active', expiresAt: d('2026-04-01T00:00:00Z'), approvedAt: d('2025-12-01T00:00:00Z') }), 'year', NOW);
+    expect(r.approvedAt).toEqual(NOW);
   });
   it('uses now when expired', () => {
     const r = extend(row({ status: 'expired', expiresAt: d('2026-03-01T00:00:00Z') }), 'month', NOW);

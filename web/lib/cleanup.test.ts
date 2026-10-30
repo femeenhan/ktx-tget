@@ -7,7 +7,7 @@ import { GET } from '../app/api/cron/cleanup/route';
 const NOW = new Date('2026-10-30T00:00:00Z');
 const ago = (d: number) => new Date(NOW.getTime() - d * 24 * 3600 * 1000);
 const row = (o: Partial<DeviceRow>): DeviceRow => ({
-  deviceId: 'a1b2c3d4e5f60718', depositor: '홍길동', status: 'approved',
+  deviceId: 'a1b2c3d4e5f60718', depositor: '홍길동', status: 'active', pendingPlan: null,
   approvedAt: null, revokedAt: null, ...o,
 } as DeviceRow);
 
@@ -20,6 +20,8 @@ describe('selectDepositorsToClear', () => {
     expect(selectDepositorsToClear([row({ approvedAt: ago(60), revokedAt: ago(31) })], NOW)).toHaveLength(1);
     expect(selectDepositorsToClear([row({ approvedAt: ago(60), revokedAt: ago(5) })], NOW)).toEqual([]);
   });
+  it('active row with pendingPlan and approvedAt 60d ago → not selected', () =>
+    expect(selectDepositorsToClear([row({ status: 'active', pendingPlan: 'month', approvedAt: ago(60) })], NOW)).toEqual([]));
   it('depositor null → 안 지움', () => expect(selectDepositorsToClear([row({ depositor: null, approvedAt: ago(40) })], NOW)).toEqual([]));
 });
 

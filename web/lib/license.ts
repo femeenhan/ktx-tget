@@ -93,7 +93,8 @@ export function extend(row: DeviceRow, plan: Plan, now: Date): DeviceRow {
     status: 'active',
     expiresAt: addPlan(base, plan),
     pendingPlan: null,
-    approvedAt: row.approvedAt ?? now,
+    // 입금자명 보관 기간(30일)을 연장 승인 시점부터 다시 센다.
+    approvedAt: now,
   };
 }
 
