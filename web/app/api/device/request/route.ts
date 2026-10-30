@@ -27,6 +27,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const repo = getRepo();
   const now = new Date();
+  // 드문 호출이고 전체 행을 써야 하므로 get + applyRequest + upsert 유지.
   const row = applyRequest(await repo.devices.get(deviceId), {
     deviceId, depositor, plan: body.plan as Plan, versionCode, now,
   });

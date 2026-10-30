@@ -11,11 +11,9 @@ export async function GET(req: Request): Promise<Response> {
 
   const repo = getRepo();
   const now = new Date();
-  let row = await repo.devices.get(deviceId);
-  if (row) {
-    row = { ...row, lastSeenAt: now, appVersion: Number.isInteger(vc) && vc >= 1 ? vc : row.appVersion };
-    await repo.devices.upsert(row);
-  }
+  const row = await repo.devices.get(deviceId);
+  // 전체 행 upsert 대신 touch: 관리자 승인/폐기와의 경합으로 stale 행이 덮어쓰이는 것을 막는다.
+  if (row) await repo.devices.touch(deviceId, now, Number.isInteger(vc) && vc >= 1 ? vc : null);
   const notice = normalizeNotice((await repo.settings.all()).notice);
   return Response.json(buildStatusResponse(row, now, notice));
 }

@@ -25,6 +25,21 @@ describe('MemoryRepo', () => {
     expect(await r.devices.get('a')).toBeNull();
   });
 
+  it('devices: touch updates only lastSeenAt/appVersion', async () => {
+    const r = createMemoryRepo();
+    await r.devices.upsert({ ...dev('a'), note: 'keep', appVersion: 3 });
+    const t = new Date('2026-04-01T00:00:00Z');
+    await r.devices.touch('a', t, 9);
+    let d = (await r.devices.get('a'))!;
+    expect(d).toEqual({ ...dev('a'), note: 'keep', appVersion: 9, lastSeenAt: t });
+    await r.devices.touch('a', NOW, null);
+    d = (await r.devices.get('a'))!;
+    expect(d.appVersion).toBe(9);
+    expect(d.lastSeenAt).toEqual(NOW);
+    await r.devices.touch('missing', NOW, 1);
+    expect(await r.devices.get('missing')).toBeNull();
+  });
+
   it('releases: insert makes the new one the only latest', async () => {
     const r = createMemoryRepo();
     expect(await r.releases.latest()).toBeNull();

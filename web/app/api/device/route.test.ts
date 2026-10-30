@@ -86,6 +86,13 @@ describe('GET /api/device/status', () => {
     expect(after.appVersion).toBe(9);
     expect(after.lastSeenAt).toBeInstanceOf(Date);
   });
+  it('versionCode 없으면 appVersion 유지', async () => {
+    await post(valid);
+    await status(`deviceId=${ID}`);
+    const after = (await getRepo().devices.get(ID))!;
+    expect(after.appVersion).toBe(5);
+    expect(after.lastSeenAt).toBeInstanceOf(Date);
+  });
   it('notice: 빈 문자열 -> null, 값 있으면 문자열', async () => {
     await getRepo().settings.set('notice', '점검 예정');
     expect((await (await status(`deviceId=${ID}`)).json()).notice).toBe('점검 예정');

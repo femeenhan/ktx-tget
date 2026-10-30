@@ -20,6 +20,8 @@ export interface Repo {
     upsert(row: DeviceRow): Promise<void>;
     list(): Promise<DeviceRow[]>;
     delete(id: string): Promise<void>;
+    /** lastSeenAt/appVersion만 갱신 (appVersion null이면 기존 값 유지). 다른 컬럼은 건드리지 않는다. */
+    touch(id: string, now: Date, appVersion: number | null): Promise<void>;
   };
   releases: {
     latest(): Promise<ReleaseRow | null>;
@@ -95,6 +97,10 @@ export function createNeonRepo(): Repo {
       async delete(id) {
         await sql`delete from devices where device_id = ${id}`;
       },
+      async touch(id, now, appVersion) {
+        await sql`update devices set last_seen_at = ${now}, app_version = coalesce(${appVersion}::int, app_version)
+          where device_id = ${id}`;
+      },
     },
     releases: {
       async latest() {
@@ -105,14 +111,21 @@ export function createNeonRepo(): Repo {
         return (await sql`select * from releases order by version_code desc`).map(toRelease);
       },
       async insert(r) {
-        const dup = await sql`select 1 from releases where version_code = ${r.versionCode}`;
-        if (dup.length > 0) throw Object.assign(new Error('duplicate version'), { code: 'DUPLICATE_VERSION' });
-        await sql`update releases set is_latest = false where is_latest`;
-        const rows = await sql`
-          insert into releases (version_code, version_name, blob_url, size_bytes, notes, is_latest, uploaded_at)
-          values (${r.versionCode}, ${r.versionName}, ${r.blobUrl}, ${r.sizeBytes}, ${r.notes}, true, ${new Date()})
-          returning *`;
-        return toRelease(rows[0]);
+        let rows: R[];
+        try {
+          rows = await sql`
+            insert into releases (version_code, version_name, blob_url, size_bytes, notes, is_latest, uploaded_at)
+            values (${r.versionCode}, ${r.versionName}, ${r.blobUrl}, ${r.sizeBytes}, ${r.notes}, false, ${new Date()})
+            returning *`;
+        } catch (e) {
+          if ((e as { code?: string }).code === '23505') {
+            throw Object.assign(new Error('duplicate version'), { code: 'DUPLICATE_VERSION' });
+          }
+          throw e;
+        }
+        const row = toRelease(rows[0]);
+        await sql`update releases set is_latest = (id = ${row.id})`;
+        return { ...row, isLatest: true };
       },
       async setLatest(id) {
         await sql`update releases set is_latest = (id = ${id})`;

@@ -32,6 +32,10 @@ export function createMemoryRepo(): Repo {
       async delete(id) {
         devices.delete(id);
       },
+      async touch(id, now, appVersion) {
+        const d = devices.get(id);
+        if (d) devices.set(id, { ...d, lastSeenAt: now, appVersion: appVersion ?? d.appVersion });
+      },
     },
     releases: {
       async latest() {
