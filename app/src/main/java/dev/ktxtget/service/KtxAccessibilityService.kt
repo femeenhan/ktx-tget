@@ -11,6 +11,7 @@ import dev.ktxtget.accessibility.KorailUiSnapshotNotes
 import dev.ktxtget.accessibility.TrainRowLocator
 import dev.ktxtget.data.MacroPreferencesRepository
 import dev.ktxtget.domain.BookingSheet
+import dev.ktxtget.domain.InitialOpenSweep
 import dev.ktxtget.domain.KorailLabels
 import dev.ktxtget.domain.MacroFilterEngine
 import dev.ktxtget.domain.MacroSettings
@@ -64,6 +65,9 @@ class KtxAccessibilityService : AccessibilityService() {
     }
     private val sensor: TrainListSensor by lazy { ScreenshotTrainListSensor(this) }
     private val tracker: SoldOutTransitionTracker = SoldOutTransitionTracker()
+
+    /** 켠 직후 첫 판독에서 이미 매진이 아닌 칸을 한 번 확인할지. 시작할 때 켜고 첫 판독에서 끈다. */
+    private var initialCheckPending: Boolean = false
     private val serviceJob: Job = SupervisorJob()
     private val scope: CoroutineScope = CoroutineScope(serviceJob + Dispatchers.Default)
     private var macroLoopJob: Job? = null
@@ -102,6 +106,7 @@ class KtxAccessibilityService : AccessibilityService() {
                     if (enabled && !previouslyEnabled) {
                         ticketConfirmationHandled.set(false)
                         tracker.reset()
+                        initialCheckPending = true
                         dumpedTreeOnce.set(false)
                         blockedCycles = 0
                     }
@@ -208,15 +213,25 @@ class KtxAccessibilityService : AccessibilityService() {
         // 전이가 보이면 확인 판독 없이 바로 탭한다. 덜 그려진 화면을 찍어 생기는 오판은
         // 시트에서 「매진」으로 걸러지므로 잘못 사지는 않고, 그 대신 취소표를 잡는 순간의
         // 0.4초를 아낀다 — 사용자 관측상 글자 지연은 드물어 이쪽이 이득이다.
-        val opening: SeatOpening = tracker.observe(rects, signals, settings.seatClickPreference)
-            ?: return
+        val transition: SeatOpening? = tracker.observe(rects, signals, settings.seatClickPreference)
+        val opening: SeatOpening = transition ?: initialCandidate(signals, settings) ?: return
         val target: AccessibilityNodeInfo = rowNodes.getOrNull(opening.rowIndex) ?: return
-        runtimeLog("open", "${opening.rowIndex + 1}번째 행 ${columnLabel(opening)} 매진 해제 — 시트 열기")
+        val why: String = if (transition != null) "매진 해제" else "시작 시 비매진"
+        runtimeLog("open", "${opening.rowIndex + 1}번째 행 ${columnLabel(opening)} $why — 시트 열기")
         if (!performClick(target)) {
             runtimeLog("open", "행 탭 실패")
             return
         }
         completeBooking(settings, opening)
+    }
+
+    /** 켠 직후 첫 판독 한 번만: 이미 매진이 아닌 칸이 있으면 그중 하나를 시트로 확인한다. */
+    private fun initialCandidate(signals: List<SoldOutSignal>, settings: MacroSettings): SeatOpening? {
+        if (!initialCheckPending) {
+            return null
+        }
+        initialCheckPending = false
+        return InitialOpenSweep.firstCandidate(signals, settings.seatClickPreference)
     }
 
     /**
