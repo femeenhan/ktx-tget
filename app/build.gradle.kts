@@ -20,8 +20,16 @@ val apiBaseUrl: String = (
 
 val releaseSigningKeys = listOf("keystorePath", "keystorePassword", "keyAlias", "keyPassword")
 val hasReleaseSigning = releaseSigningKeys.all { !localProperties.getProperty(it).isNullOrBlank() }
+// 서명 키 없이 release를 만들면 debug 키로 서명된 APK가 조용히 나가 구매자 기기에 덮어쓸 수 없게 된다.
+// debug 빌드·단위 테스트는 키 없이 돌아가야 하므로 release 산출 작업만 실행 시점에 막는다.
 if (!hasReleaseSigning) {
-    logger.warn("WARNING: release signing keys missing in local.properties; falling back to debug signing.")
+    tasks.matching {
+        it.name.startsWith("assembleRelease") || it.name.startsWith("bundleRelease") || it.name == "packageRelease"
+    }.configureEach {
+        doFirst {
+            throw GradleException("release 서명 키가 local.properties에 없습니다 (keystorePath/keystorePassword/keyAlias/keyPassword)")
+        }
+    }
 }
 
 android {
@@ -49,7 +57,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName(if (hasReleaseSigning) "release" else "debug")
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
