@@ -35,7 +35,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 | `web/` | 판매 사이트·APK 배포·라이선스 API·관리자 (Next.js, Vercel) |
 | `scripts/build_preview_apk.sh` | release 서명 APK → `dist/ktx-tget-<버전>.apk` |
 
-- UI: **XML + ViewBinding**, **Material 3**, **ConstraintLayout** (Compose 미사용)
+- UI: **Jetpack Compose** + **Material 3** (XML 레이아웃·ViewBinding 미사용)
 - 루트 및 `app` 모듈은 Kotlin DSL(`*.gradle.kts`)을 사용합니다.
 
 ## 버전 정보 (초기 스캐폴드)
@@ -105,7 +105,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 
 1. `app/build.gradle.kts`의 `versionCode`를 올리고 `versionName`을 바꿉니다.
 2. `./scripts/build_preview_apk.sh` → `dist/ktx-tget-<versionName>.apk`
-3. https://tget.bigseasons.co.kr/admin/releases 에서 APK 파일, versionCode, versionName, 변경 내용을 넣고 업로드. 올리면 자동으로 최신이 되고, 앱 홈에 「새 버전 받기」 배너가 뜹니다.
+3. https://tget.bigseasons.co.kr/admin/releases 에서 APK 파일, versionCode, versionName, 변경 내용을 넣고 업로드. **versionCode는 APK의 `versionCode`와 똑같이** 넣습니다(다르면 앱에 「새 버전」 배너가 계속 뜹니다). 올리면 자동으로 최신이 되고, 앱 홈에 「새 버전 받기」 배너가 뜹니다.
 4. 문제가 있으면 같은 화면에서 이전 버전을 「최신으로」 되돌립니다.
 5. 확인: `curl https://tget.bigseasons.co.kr/api/version`
 

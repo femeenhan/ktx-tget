@@ -117,21 +117,26 @@ export function createNeonRepo(): Repo {
         return (await sql`select * from releases order by version_code desc`).map(toRelease);
       },
       async insert(r) {
+        // 삽입과 최신 지정을 한 문장으로 묶어, 중간에 실패해도 새 버전만 최신이 아닌 상태가 남지 않게 한다.
+        // (데이터 수정 CTE끼리는 서로의 결과를 못 보므로 update는 기존 행만 false로 내리고, 새 행은 is_latest=true로 넣는다.)
         let rows: R[];
         try {
           rows = await sql`
-            insert into releases (version_code, version_name, blob_url, size_bytes, notes, is_latest, uploaded_at)
-            values (${r.versionCode}, ${r.versionName}, ${r.blobUrl}, ${r.sizeBytes}, ${r.notes}, false, ${new Date()})
-            returning *`;
+            with ins as (
+              insert into releases (version_code, version_name, blob_url, size_bytes, notes, is_latest, uploaded_at)
+              values (${r.versionCode}, ${r.versionName}, ${r.blobUrl}, ${r.sizeBytes}, ${r.notes}, true, ${new Date()})
+              returning *
+            ), demote as (
+              update releases set is_latest = false where is_latest = true and id <> (select id from ins)
+            )
+            select * from ins`;
         } catch (e) {
           if ((e as { code?: string }).code === '23505') {
             throw Object.assign(new Error('duplicate version'), { code: 'DUPLICATE_VERSION' });
           }
           throw e;
         }
-        const row = toRelease(rows[0]);
-        await sql`update releases set is_latest = (id = ${row.id})`;
-        return { ...row, isLatest: true };
+        return toRelease(rows[0]);
       },
       async setLatest(id) {
         await sql`update releases set is_latest = (id = ${id})`;

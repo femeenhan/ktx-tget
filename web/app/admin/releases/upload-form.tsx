@@ -56,6 +56,7 @@ export function UploadForm() {
         <input name="versionCode" type="number" min={1} step={1} placeholder="versionCode" required />{' '}
         <input name="versionName" maxLength={40} placeholder="versionName" required />
       </p>
+      <p><small>versionCode는 APK의 versionCode(app/build.gradle.kts)와 같아야 합니다. 다르면 앱에 「새 버전」 배너가 계속 뜹니다.</small></p>
       <p><textarea name="notes" rows={3} cols={50} placeholder="변경 내용" /></p>
       <button type="submit" disabled={busy}>업로드</button> <span>{status}</span>
       {error && <p className="row-error">{error}</p>}
