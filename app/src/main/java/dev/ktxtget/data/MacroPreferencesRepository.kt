@@ -130,20 +130,21 @@ class MacroPreferencesRepository(
             excludedCsv?.split(",")?.mapNotNull { segment: String ->
                 TrainExcludeNumbersParser.normalizeToken(segment.trim())
             }?.toSet() ?: emptySet()
-        val excludeFreeseatRows: Boolean = p[PrefsKeys.EXCLUDE_FREESEAT] ?: false
+        val defaults: MacroSettings = MacroSettings.DEFAULT
+        val excludeFreeseatRows: Boolean = p[PrefsKeys.EXCLUDE_FREESEAT] ?: defaults.excludeFreeseatRows
         val excludeGeneralStandingComboRows: Boolean =
-            p[PrefsKeys.EXCLUDE_GENERAL_STANDING_COMBO] ?: false
+            p[PrefsKeys.EXCLUDE_GENERAL_STANDING_COMBO] ?: defaults.excludeGeneralStandingComboRows
         val excludeGeneralStandingOnlyRows: Boolean =
-            p[PrefsKeys.EXCLUDE_GENERAL_STANDING_ONLY] ?: false
-        val prefName: String = p[PrefsKeys.SEAT_PREF] ?: SeatClickPreference.BOTH_PREFER_GENERAL.name
+            p[PrefsKeys.EXCLUDE_GENERAL_STANDING_ONLY] ?: defaults.excludeGeneralStandingOnlyRows
+        val prefName: String = p[PrefsKeys.SEAT_PREF] ?: defaults.seatClickPreference.name
         val seatClickPreference: SeatClickPreference = try {
             SeatClickPreference.valueOf(prefName)
         } catch (_: IllegalArgumentException) {
-            SeatClickPreference.BOTH_PREFER_GENERAL
+            defaults.seatClickPreference
         }
         val ticketAlertMode: TicketAlertMode = resolveTicketAlertMode(p)
         val autoConfirmIntermediateStopDialog: Boolean =
-            p[PrefsKeys.AUTO_CONFIRM_INTERMEDIATE_STOP] ?: false
+            p[PrefsKeys.AUTO_CONFIRM_INTERMEDIATE_STOP] ?: defaults.autoConfirmIntermediateStopDialog
         return MacroSettings(
             excludedTrainNumbers = excludedTrainNumbers,
             excludeFreeseatRows = excludeFreeseatRows,
@@ -161,14 +162,15 @@ class MacroPreferencesRepository(
             return try {
                 TicketAlertMode.valueOf(modeName)
             } catch (_: IllegalArgumentException) {
-                TicketAlertMode.STRONG
+                MacroSettings.DEFAULT.ticketAlertMode
             }
         }
-        val legacyEnabled: Boolean = p[PrefsKeys.USER_ALERTS_ENABLED] ?: true
-        return if (legacyEnabled) {
-            TicketAlertMode.STRONG
-        } else {
-            TicketAlertMode.OFF
+        // 예전 버전의 켜짐/꺼짐 값만 있으면 그 뜻을 지킨다. 아무 값도 없으면 기본값.
+        val legacyEnabled: Boolean? = p[PrefsKeys.USER_ALERTS_ENABLED]
+        return when (legacyEnabled) {
+            null -> MacroSettings.DEFAULT.ticketAlertMode
+            true -> TicketAlertMode.STRONG
+            false -> TicketAlertMode.OFF
         }
     }
 

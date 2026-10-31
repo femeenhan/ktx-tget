@@ -599,10 +599,7 @@ private fun RefreshIntervalCard(refreshMs: Long, onChange: (Long) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            SectionHeading(
-                title = stringResource(R.string.refresh_interval_title),
-                description = stringResource(R.string.refresh_interval_range),
-            )
+            SectionHeading(title = stringResource(R.string.refresh_interval_title))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StepButton(
                     symbol = "−",
