@@ -69,7 +69,7 @@ licenseSecret=본인만_아는_값
 ### 1-1. 빌드 전 체크
 
 - [ ] 코레일톡 최신 버전에서 실제로 동작 확인했는가 (마지막 확인: **코레일톡 7.0.10**, 2026-10-24)
-- [ ] 바뀐 게 있으면 `app/build.gradle.kts`의 `versionCode`를 1 올리고 `versionName`을 바꿨는가 (현재 2 / 0.2.0)
+- [ ] 바뀐 게 있으면 `app/build.gradle.kts`의 `versionName`을 올렸는가 (`versionCode`는 versionName에서 자동 계산)
 - [ ] `./gradlew testDebugUnitTest lintDebug` 통과
 
 ### 1-2. 빌드
@@ -141,7 +141,7 @@ adb install -r dist/ktx-tget-release.apk
 
 ## 5. 업데이트 배포
 
-1. 1단계와 같이 `versionCode`를 올리고 `./scripts/build_preview_apk.sh`로 빌드합니다. **같은 Mac, 같은 서명 키**여야 합니다.
+1. 1단계와 같이 `versionName`을 올리고 `./scripts/build_preview_apk.sh`로 빌드합니다. **같은 Mac, 같은 서명 키**여야 합니다.
 2. 새 APK를 보냅니다. 구매자는 덮어 설치만 하면 되고 키는 다시 넣지 않습니다.
 3. 업데이트 뒤 접근성이 꺼질 수 있으니 확인하라고 같이 알려 줍니다.
 

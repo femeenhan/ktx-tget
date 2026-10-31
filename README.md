@@ -103,9 +103,9 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 
 ### 새 버전(APK) 올리기
 
-1. `app/build.gradle.kts`의 `versionCode`를 올리고 `versionName`을 바꿉니다.
+1. `app/build.gradle.kts`의 `versionName`을 바꿉니다(예: 0.3.4). `versionCode`는 여기서 자동 계산됩니다(X.Y.Z → X×10000+Y×100+Z, 0.3.4 → 304).
 2. `./scripts/build_preview_apk.sh` → `dist/ktx-tget-<versionName>.apk`
-3. https://tget.bigseasons.co.kr/admin/releases 에서 APK 파일, versionCode, versionName, 변경 내용을 넣고 업로드. **versionCode는 APK의 `versionCode`와 똑같이** 넣습니다(다르면 앱에 「새 버전」 배너가 계속 뜹니다). 올리면 자동으로 최신이 되고, 앱 홈에 「새 버전 받기」 배너가 뜹니다.
+3. https://tget.bigseasons.co.kr/admin/releases 에서 APK 파일, versionName, 변경 내용을 넣고 업로드. versionCode는 폼이 같은 공식으로 계산해 넣습니다. 올리면 자동으로 최신이 되고, 앱 홈에 「새 버전 받기」 배너가 뜹니다.
 4. 문제가 있으면 같은 화면에서 이전 버전을 「최신으로」 되돌립니다.
 5. 확인: `curl https://tget.bigseasons.co.kr/api/version`
 

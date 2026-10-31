@@ -32,6 +32,15 @@ if (!hasReleaseSigning) {
     }
 }
 
+/** X.Y.Z 꼴 versionName을 단조 증가하는 versionCode로 바꾼다. 각 자리는 0~99. */
+fun versionCodeOf(versionName: String): Int {
+    val parts: List<Int> = versionName.split(".").map { part: String ->
+        part.toIntOrNull() ?: error("versionName은 X.Y.Z 숫자 꼴이어야 합니다: $versionName")
+    }
+    require(parts.size == 3 && parts.all { it in 0..99 }) { "versionName은 X.Y.Z (각 0~99) 꼴이어야 합니다: $versionName" }
+    return parts[0] * 10000 + parts[1] * 100 + parts[2]
+}
+
 android {
     namespace = "dev.ktxtget"
     compileSdk = 35
@@ -39,8 +48,10 @@ android {
         applicationId = "dev.ktxtget"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
+        // versionCode는 versionName에서 자동으로 만든다: X.Y.Z → X*10000 + Y*100 + Z (0.3.3 → 303).
+        // 올릴 때는 versionName 한 줄만 바꾼다. 판매 웹 관리자 폼도 같은 공식으로 계산한다(web/lib/version-code.ts).
         versionName = "0.3.3"
+        versionCode = versionCodeOf(versionName!!)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }

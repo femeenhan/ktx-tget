@@ -35,7 +35,7 @@ if ! grep -q "CN=bigseasons" <<<"${CERTS}"; then
 fi
 echo ">> Signature OK: $(grep -m1 'Signer #1 certificate DN' <<<"${CERTS}")"
 
-VERSION_NAME="$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')"
+VERSION_NAME="$(grep -m1 'versionName = "' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')"
 OUT="${DIST_DIR}/ktx-tget-${VERSION_NAME}.apk"
 cp "${APK_SRC}" "${OUT}"
 echo ">> Wrote ${OUT}"
