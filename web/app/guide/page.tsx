@@ -17,6 +17,7 @@ const TOC: [string, string][] = [
   ['korail', '코레일톡 준비·화면 축소'],
   ['settings', '앱 설정'],
   ['run', '시작과 중지'],
+  ['spare', '안 쓰는 폰 활용'],
   ['device', '기기를 바꿨을 때'],
   ['faq', '자주 묻는 것'],
 ];
@@ -96,8 +97,9 @@ export default async function GuidePage() {
           <h2 id="h-korail">4. 코레일톡 준비</h2>
           <ol className="num-list">
             <li>같은 휴대폰에 <b>코레일톡</b>을 설치하고 로그인합니다.</li>
-            <li>출발역·도착역·날짜로 조회해 <b>열차 목록</b>을 엽니다.</li>
-            <li>원하는 시간대 열차가 <b>목록 맨 위</b>에 오도록 출발 시각을 맞춥니다.</li>
+            <li><b>출발역·도착역·날짜·시간·인원</b>을 모두 정해서 조회해 <b>열차 목록</b>을 엽니다.</li>
+            <li>특히 <b>출발 시각</b>을 원하는 시간대 바로 앞으로 맞추세요. 그 열차들이 <b>목록 맨 위</b>에 옵니다.</li>
+            <li>목록 위의 정렬(<b>출발빠른순·도착빠른순·최소시간순</b>)을 활용하세요. <b>도착빠른순</b>으로 두면 경유 없이 바로 가는 열차가 위로 와서 직통 열차만 노리기 쉽습니다.</li>
           </ol>
           <p className="callout">
             <b>화면에 보이는 열차만 살핍니다.</b> 스크롤해야 나오는 열차는 보지 않습니다. 시작한 뒤에는 코레일톡 열차 목록을 띄운 채로 두세요.
@@ -108,8 +110,17 @@ export default async function GuidePage() {
           <ul className="dot-list">
             <li>갤럭시: <b>설정 → 디스플레이 → 화면 크기 및 글자 → 화면 축소</b>를 가장 작게.</li>
             <li>픽셀 등: <b>설정 → 디스플레이 → 표시 크기와 텍스트 → 표시 크기</b>를 가장 작게.</li>
-            <li>PC가 있으면 앱 홈 맨 아래 「화면 축소」의 adb 명령으로 설정 앱 최소값보다 더 줄일 수 있습니다. 예매가 끝나면 되돌리세요.</li>
+            <li>PC가 있으면 adb로 설정 앱 최소값보다 더 줄일 수 있습니다. 아래를 보세요.</li>
           </ul>
+          <h3>adb로 더 줄이기 <span className="muted small">(PC 필요)</span></h3>
+          <ol className="num-list">
+            <li>휴대폰 <b>설정 → 개발자 옵션 → USB 디버깅</b>을 켭니다. 개발자 옵션이 없으면 설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드 번호를 7번 누르면 생깁니다.</li>
+            <li>PC에 Android <b>platform-tools</b>(adb)를 설치하고 휴대폰을 USB로 연결한 뒤, 휴대폰에 뜨는 「USB 디버깅 허용」을 누릅니다.</li>
+            <li>PC 터미널에서 실행합니다. 앱 홈 맨 아래 「화면 축소」에서도 복사할 수 있습니다.</li>
+          </ol>
+          <pre className="code-block">adb shell wm density 340</pre>
+          <p>플립5 기준 5행이 7행으로 늘어납니다. 340보다 더 내리면 행이 너무 작아져 목록을 못 읽을 수 있습니다. 예매가 끝나면 되돌리세요.</p>
+          <pre className="code-block">adb shell wm density reset</pre>
         </section>
 
         <section id="settings" className="guide-section" aria-labelledby="h-settings">
@@ -135,8 +146,17 @@ export default async function GuidePage() {
           <p className="callout">실행 중에도 설정을 바꿀 수 있고, 다음 새로고침부터 적용됩니다. 무슨 일이 있었는지는 홈의 「기록」에서 볼 수 있습니다.</p>
         </section>
 
+        <section id="spare" className="guide-section" aria-labelledby="h-spare">
+          <h2 id="h-spare">7. 안 쓰는 폰이 있다면</h2>
+          <p>
+            서랍에 있는 예전 휴대폰에 코레일톡과 ktx-tget을 설치해 두면, 평소 쓰는 폰은 그대로 쓰면서 밤새 돌릴 수 있습니다.
+            와이파이만 되면 되고 유심은 없어도 됩니다. 코레일톡 로그인과 결제 알림은 그 폰에서 받습니다.
+          </p>
+          <p className="callout">충전기에 꽂고 <b>설정 → 디스플레이 → 화면 자동 꺼짐</b>을 길게 둔 채 열차 목록을 띄워 두세요. 화면이 꺼지면 멈춥니다.</p>
+        </section>
+
         <section id="device" className="guide-section" aria-labelledby="h-device">
-          <h2 id="h-device">7. 기기를 바꿨을 때</h2>
+          <h2 id="h-device">8. 기기를 바꿨을 때</h2>
           <p>
             휴대폰을 바꾸거나 초기화하면 기기 ID가 바뀌어 라이선스가 따라가지 않습니다. 새 기기에서 앱을 열고 카드 아래쪽의 기기 ID를{' '}
             <a href={contact} className="text-link" {...externalProps(contact)}>오픈채팅</a>으로 알려 주세요. 기존 라이선스를 회수하고 새 기기를 승인해 드립니다.

@@ -136,6 +136,7 @@
 .site ol.num-list, .site ul.dot-list { padding-left: 1.3em; display: grid; gap: 6px; }
 .site ul.dot-list { list-style: disc; }
 .callout { border: 1px dashed var(--hairline); border-radius: 16px; padding: 14px 16px; margin-top: 16px; font-size: 15px; }
+.code-block { font-family: var(--font-mono); font-size: 14px; background: rgba(0, 0, 0, 0.05); border-radius: 12px; padding: 12px 14px; margin: 10px 0; overflow-x: auto; white-space: pre; }
 .settings-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .settings-table th, .settings-table td { text-align: left; vertical-align: top; padding: 12px 0; border-top: 1px solid var(--hairline); }
 .settings-table th { width: 34%; padding-right: 14px; font-weight: 600; }
