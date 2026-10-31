@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ktxtget.BuildConfig
 import dev.ktxtget.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import dev.ktxtget.license.AppConfig
 import dev.ktxtget.license.LicenseSnapshot
 import dev.ktxtget.license.LicenseStatus
@@ -52,7 +55,6 @@ import dev.ktxtget.ui.theme.InkMuted
 import dev.ktxtget.ui.theme.InkSecondary
 import dev.ktxtget.ui.theme.MonoFamily
 import dev.ktxtget.ui.theme.Sage
-import java.util.Locale
 
 private const val DEPOSITOR_MAX_LENGTH: Int = 40
 private const val HOUR_MS: Long = 3600L * 1000
@@ -94,11 +96,20 @@ fun hoursLeft(s: LicenseSnapshot, nowWallMs: Long): Long? {
     return (left + HOUR_MS - 1) / HOUR_MS
 }
 
-fun shouldShowExpiryLine(s: LicenseSnapshot, nowWallMs: Long): Boolean {
-    if (s.status != LicenseStatus.ACTIVE) return false
-    if (s.renewalPending) return true
+/** 활성 상태면 늘 보여 준다. 기한이 있는 이용자는 남은 시간을, 영구 이용자는 「영구」를 본다. */
+fun shouldShowExpiryLine(s: LicenseSnapshot, @Suppress("UNUSED_PARAMETER") nowWallMs: Long): Boolean =
+    s.status == LicenseStatus.ACTIVE
+
+/** 만료 7일 안이면 true. 줄을 강조할 때 쓴다. */
+fun isNearExpiry(s: LicenseSnapshot, nowWallMs: Long): Boolean {
     val expires: Long = s.expiresAtEpochMs ?: return false
     return expires - serverNow(s, nowWallMs) <= EXPIRY_WARN_MS
+}
+
+/** 만료 일시를 기기 시간대로. 하루 이하 남았으면 시각까지, 아니면 날짜만. */
+fun expiryDateText(expiresAtEpochMs: Long, withTime: Boolean): String {
+    val pattern: String = if (withTime) "M/d HH:mm" else "yyyy. M. d"
+    return SimpleDateFormat(pattern, Locale.KOREA).format(Date(expiresAtEpochMs))
 }
 
 @Composable
@@ -424,11 +435,13 @@ fun PendingCard(config: AppConfig?, onCheck: () -> Unit, checking: Boolean) {
 fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, renewOpen: Boolean) {
     val days: Long? = daysLeft(snapshot, nowWallMs)
     val hours: Long? = hoursLeft(snapshot, nowWallMs)
+    val expires: Long? = snapshot.expiresAtEpochMs
     val leftText: String = when {
-        days == null || hours == null -> ""
-        hours <= 24 -> stringResource(R.string.license_hours_left, hours)
-        else -> stringResource(R.string.license_days_left, days)
+        expires == null || days == null || hours == null -> stringResource(R.string.license_lifetime_line)
+        hours <= 24 -> stringResource(R.string.license_hours_left_until, hours, expiryDateText(expires, withTime = true))
+        else -> stringResource(R.string.license_days_left_until, days, expiryDateText(expires, withTime = false))
     }
+    val near: Boolean = isNearExpiry(snapshot, nowWallMs)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -439,13 +452,13 @@ fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, 
         Text(
             text = leftText,
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = if (near) FontWeight.SemiBold else FontWeight.Medium,
             color = Ink,
             modifier = Modifier.weight(1f),
         )
         if (snapshot.renewalPending) {
             Text(text = stringResource(R.string.license_renewal_pending), fontSize = 13.sp, color = InkSecondary)
-        } else {
+        } else if (expires != null) {
             LineButton(
                 text = stringResource(if (renewOpen) R.string.license_renew_close else R.string.license_renew),
                 onClick = onRenew,

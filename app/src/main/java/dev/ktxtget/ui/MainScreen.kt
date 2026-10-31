@@ -122,13 +122,12 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
     )
     val pausedUntil: Long by repository.pausedUntilWallMs.collectAsStateWithLifecycle(initialValue = 0L)
     var nowWall: Long by remember { mutableStateOf(System.currentTimeMillis()) }
-    // 쉬는 중에는 남은 분이 줄어드는 것이 보이도록 30초마다 시계를 갱신한다.
-    LaunchedEffect(pausedUntil) {
-        while (isActive && pausedUntil > System.currentTimeMillis()) {
+    // 남은 시간(쉬는 중 N분, 라이선스 N시간)이 화면에서 줄어들도록 30초마다 시계를 갱신한다.
+    LaunchedEffect(Unit) {
+        while (isActive) {
             nowWall = System.currentTimeMillis()
             delay(30_000)
         }
-        nowWall = System.currentTimeMillis()
     }
     val pausedRemainingMin: Long = ((pausedUntil - nowWall + 59_999L) / 60_000L).coerceAtLeast(0L)
     fun dismissKeyboard() {
@@ -285,11 +284,11 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
             }
             LicenseStatus.ACTIVE -> {
                 val snap: LicenseSnapshot? = licenseSnapshot
-                if (snap != null && shouldShowExpiryLine(snap, System.currentTimeMillis())) {
+                if (snap != null && shouldShowExpiryLine(snap, nowWall)) {
                     Spacer(modifier = Modifier.height(6.dp))
                     ExpiryLine(
                         snapshot = snap,
-                        nowWallMs = System.currentTimeMillis(),
+                        nowWallMs = nowWall,
                         onRenew = { showRenew = !showRenew },
                         renewOpen = showRenew,
                     )

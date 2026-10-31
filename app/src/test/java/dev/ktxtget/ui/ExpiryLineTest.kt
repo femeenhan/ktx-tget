@@ -43,11 +43,26 @@ class ExpiryLineTest {
     }
 
     @Test
-    fun lineShowsOnlyWhenActiveAndNearExpiryOrRenewalPending() {
+    fun lineShowsWheneverActive() {
         assertTrue(shouldShowExpiryLine(snap(now + 7 * day), now))
-        assertFalse(shouldShowExpiryLine(snap(now + 8 * day), now))
-        assertFalse(shouldShowExpiryLine(snap(null), now))
+        assertTrue(shouldShowExpiryLine(snap(now + 300 * day), now))
+        assertTrue(shouldShowExpiryLine(snap(null), now))
         assertTrue(shouldShowExpiryLine(snap(now + 300 * day, renewalPending = true), now))
         assertFalse(shouldShowExpiryLine(snap(now + day, status = LicenseStatus.PENDING), now))
+    }
+
+    @Test
+    fun nearExpiryWithinSevenDays() {
+        assertTrue(isNearExpiry(snap(now + 7 * day), now))
+        assertFalse(isNearExpiry(snap(now + 8 * day), now))
+        assertFalse(isNearExpiry(snap(null), now))
+    }
+
+    @Test
+    fun hoursLeftRoundsUpAndClampsAtZero() {
+        assertEquals(3L, hoursLeft(snap(now + 2 * hour + 1), now))
+        assertEquals(24L, hoursLeft(snap(now + day), now))
+        assertEquals(0L, hoursLeft(snap(now - hour), now))
+        assertNull(hoursLeft(snap(null), now))
     }
 }

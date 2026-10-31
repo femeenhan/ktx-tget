@@ -130,6 +130,9 @@
     <string name="license_checking">확인 중…</string>
     <string name="license_days_left">%1$d일 남음</string>
     <string name="license_hours_left">%1$d시간 남음</string>
+    <string name="license_days_left_until">%1$d일 남음 · %2$s까지</string>
+    <string name="license_hours_left_until">%1$d시간 남음 · %2$s까지</string>
+    <string name="license_lifetime_line">영구 라이선스</string>
     <string name="license_renew">연장 요청</string>
     <string name="license_renew_close">닫기</string>
     <string name="license_renewal_pending">연장 승인 대기</string>
