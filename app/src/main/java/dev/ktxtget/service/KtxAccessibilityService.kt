@@ -95,6 +95,7 @@ class KtxAccessibilityService : AccessibilityService() {
      */
     @Volatile
     private var postReserveConfirmDeadlineUptimeMs: Long = 0L
+    private var sheetCloseFailures: Int = 0
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -466,12 +467,49 @@ class KtxAccessibilityService : AccessibilityService() {
         val handle: AccessibilityNodeInfo? =
             rootInActiveWindow?.let { root -> BookingSheetReader.findDragHandle(root) }
         if (handle == null || !performClick(handle)) {
-            stopMacro("시트를 닫지 못해 매크로를 멈춥니다. 화면을 확인해 주세요.")
+            if (rootInActiveWindow?.let { BookingSheetReader.isOpen(it) } != true) {
+                // 손잡이를 못 찾았지만 시트도 없다 — 이미 닫힌 것이다.
+                sheetCloseFailures = 0
+                return
+            }
+            noteSheetCloseFailure("시트 손잡이를 찾지 못했습니다")
             return
         }
-        if (!awaitBackOnList()) {
-            stopMacro("시트를 닫은 뒤 열차 목록으로 돌아오지 못해 매크로를 멈춥니다. 화면을 확인해 주세요.")
+        if (awaitBackOnList()) {
+            sheetCloseFailures = 0
+            return
         }
+        // 닫힘 애니메이션이 길거나 시트가 반쯤 걸쳐 남는 경우(실기 18:29). 한 번 더 손잡이를 누르고
+        // 그래도 안 되면 이번 주기만 포기한다. 다음 주기가 시트를 보면 다시 닫는다.
+        rootInActiveWindow?.let { root -> BookingSheetReader.findDragHandle(root) }?.let { again ->
+            performClick(again)
+        }
+        if (awaitBackOnList()) {
+            sheetCloseFailures = 0
+            runtimeLog("sheet", "시트가 늦게 닫혀 손잡이를 한 번 더 눌렀습니다")
+            return
+        }
+        noteSheetCloseFailure("시트를 닫은 뒤 목록으로 돌아오지 못했습니다 — ${describeListBlocker()}")
+    }
+
+    /** 시트 닫기 실패가 연달아 [MAX_SHEET_CLOSE_FAILURES]번이면 멈춘다. 그 전에는 기록만 하고 다음 주기로 넘긴다. */
+    private suspend fun noteSheetCloseFailure(detail: String) {
+        sheetCloseFailures++
+        if (sheetCloseFailures >= MAX_SHEET_CLOSE_FAILURES) {
+            sheetCloseFailures = 0
+            stopMacro("$detail — ${MAX_SHEET_CLOSE_FAILURES}번 연속 실패해 매크로를 멈춥니다. 화면을 확인해 주세요.")
+        } else {
+            runtimeLog("sheet", "$detail — 다음 주기에 다시 시도")
+        }
+    }
+
+    /** 목록으로 못 돌아온 이유를 한 줄로. 어느 조건이 막았는지 기록에 남긴다. */
+    private fun describeListBlocker(): String {
+        val root: AccessibilityNodeInfo = rootInActiveWindow ?: return "화면을 읽지 못함"
+        if (!isKorailActiveWindow(root)) return "코레일 앱이 앞에 없음"
+        val open: Boolean = BookingSheetReader.isOpen(root)
+        val refresh: Boolean = NodeFinder.findClickableContainingText(root, KorailLabels.REFRESH) != null
+        return "시트 열림=$open, 새로고침 버튼=$refresh, 화면: ${describeForegroundText()}"
     }
 
     /** 시트가 사라지고 목록의 새로고침 버튼이 다시 보이면 true. */
@@ -724,7 +762,8 @@ class KtxAccessibilityService : AccessibilityService() {
         const val CLASS_TAB_SETTLE_MS: Long = 250L
 
         /** 손잡이를 누른 뒤 시트가 닫히고 목록이 돌아오기를 기다리는 최대 시간. */
-        const val SHEET_CLOSE_BUDGET_MS: Long = 2000L
+        const val SHEET_CLOSE_BUDGET_MS: Long = 3000L
+        const val MAX_SHEET_CLOSE_FAILURES: Int = 3
         const val ROW_NOTICE_SETTLE_MS: Long = 300L
         const val POST_RESERVE_CONFIRM_BUDGET_MS: Long = 15_000L
         const val DIALOG_CLICK_COOLDOWN_MS: Long = 800L
