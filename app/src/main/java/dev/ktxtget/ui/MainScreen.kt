@@ -108,7 +108,7 @@ private enum class MacroState { LOCKED, IDLE, RUNNING }
 private const val RECENT_LOG_COUNT: Int = 4
 
 @Composable
-fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
+fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, onOpenGuide: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -220,7 +220,7 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
         if (update != null && update.versionCode > BuildConfig.VERSION_CODE) {
             UpdateBanner(versionName = update.versionName, onDownload = { openUrl(context, update.url) })
         }
-        HomeHeader(onOpenLog = onOpenLog)
+        HomeHeader(onOpenLog = onOpenLog, onOpenGuide = onOpenGuide)
         StatusPill(
             state = state,
             onStart = {
@@ -416,7 +416,7 @@ private fun Modifier.pointerTapToDismiss(onTap: () -> Unit): Modifier =
     )
 
 @Composable
-private fun HomeHeader(onOpenLog: () -> Unit) {
+private fun HomeHeader(onOpenLog: () -> Unit, onOpenGuide: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -431,7 +431,10 @@ private fun HomeHeader(onOpenLog: () -> Unit) {
             letterSpacing = (-1).sp,
             color = Ink,
         )
-        UnderlinedLink(text = stringResource(R.string.home_log_link), onClick = onOpenLog)
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            UnderlinedLink(text = stringResource(R.string.home_guide_link), onClick = onOpenGuide)
+            UnderlinedLink(text = stringResource(R.string.home_log_link), onClick = onOpenLog)
+        }
     }
 }
 

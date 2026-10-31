@@ -14,7 +14,7 @@ const TOC: [string, string][] = [
   ['access', '접근성 켜기'],
   ['notify', '알림·배터리'],
   ['license', '활성화·연장'],
-  ['korail', '코레일톡 준비'],
+  ['korail', '코레일톡 준비·화면 축소'],
   ['settings', '앱 설정'],
   ['run', '시작과 중지'],
   ['device', '기기를 바꿨을 때'],
@@ -97,8 +97,19 @@ export default async function GuidePage() {
           <ol className="num-list">
             <li>같은 휴대폰에 <b>코레일톡</b>을 설치하고 로그인합니다.</li>
             <li>출발역·도착역·날짜로 조회해 <b>열차 목록</b>을 엽니다.</li>
-            <li>원하는 시간대 열차가 <b>목록 맨 위</b>에 오도록 출발 시각을 맞춥니다. 화면에 보이는 열차만 감지합니다.</li>
+            <li>원하는 시간대 열차가 <b>목록 맨 위</b>에 오도록 출발 시각을 맞춥니다.</li>
           </ol>
+          <p className="callout">
+            <b>화면에 보이는 열차만 살핍니다.</b> 스크롤해야 나오는 열차는 보지 않습니다. 시작한 뒤에는 코레일톡 열차 목록을 띄운 채로 두세요.
+            다른 앱이나 다른 화면으로 가면 멈춥니다.
+          </p>
+          <h3>화면 축소로 더 많은 열차 보기 <span className="muted small">(선택)</span></h3>
+          <p>휴대폰 화면을 축소하면 한 화면에 들어오는 열차 행이 늘어납니다. 플립5 기준 5행이 6~7행이 됩니다.</p>
+          <ul className="dot-list">
+            <li>갤럭시: <b>설정 → 디스플레이 → 화면 크기 및 글자 → 화면 축소</b>를 가장 작게.</li>
+            <li>픽셀 등: <b>설정 → 디스플레이 → 표시 크기와 텍스트 → 표시 크기</b>를 가장 작게.</li>
+            <li>PC가 있으면 앱 홈 맨 아래 「화면 축소」의 adb 명령으로 설정 앱 최소값보다 더 줄일 수 있습니다. 예매가 끝나면 되돌리세요.</li>
+          </ul>
         </section>
 
         <section id="settings" className="guide-section" aria-labelledby="h-settings">

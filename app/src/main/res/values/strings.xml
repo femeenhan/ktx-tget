@@ -15,6 +15,11 @@
     <string name="notification_ticket_alert_text">승차권 정보 확인 화면입니다. 지금 바로 결제를 완료하세요.</string>
     <string name="notification_ticket_alert_stop_action">알림 중지</string>
     <string name="home_log_link">기록</string>
+    <string name="home_guide_link">안내</string>
+    <string name="guide_screen_title">안내</string>
+    <string name="guide_web_note">접근성·알림·활성화까지 포함한 전체 안내는 웹에 있습니다.</string>
+    <string name="guide_web_link">웹 안내 열기</string>
+    <string name="guide_open_display_settings">디스플레이 설정 열기</string>
     <string name="status_idle">대기 중</string>
     <string name="status_idle_desc">코레일톡 열차 목록을 열어 두고 시작하세요</string>
     <string name="status_running">실행 중</string>

@@ -14,6 +14,7 @@ import dev.ktxtget.ui.theme.Sage
 private object Routes {
     const val MAIN: String = "main"
     const val LOG: String = "log"
+    const val GUIDE: String = "guide"
 }
 
 @Composable
@@ -35,10 +36,18 @@ fun KtxtgetApp(repository: MacroPreferencesRepository) {
                             launchSingleTop = true
                         }
                     },
+                    onOpenGuide = {
+                        navController.navigate(Routes.GUIDE) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.LOG) {
                 LogScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.GUIDE) {
+                GuideScreen(onBack = { navController.popBackStack() })
             }
         }
     }
