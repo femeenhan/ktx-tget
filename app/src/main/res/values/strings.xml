@@ -14,6 +14,8 @@
     <string name="notification_ticket_alert_title">🚆 예매 화면 도달!</string>
     <string name="notification_ticket_alert_text">승차권 정보 확인 화면입니다. 지금 바로 결제를 완료하세요.</string>
     <string name="notification_ticket_alert_stop_action">알림 중지</string>
+    <string name="notification_paused_title">코레일톡 경고로 멈췄습니다</string>
+    <string name="notification_paused_text">코레일톡이 비정상 접근을 안내해 매크로를 멈췄습니다. %1$d분 뒤 다시 시작할 수 있습니다. 코레일톡 화면의 안내를 확인하고, 자주 반복되면 새로고침 간격을 늘려 주세요.</string>
     <string name="home_log_link">기록</string>
     <string name="home_guide_link">안내</string>
     <string name="guide_screen_title">안내</string>
@@ -24,6 +26,8 @@
     <string name="status_idle_desc">코레일톡 열차 목록을 열어 두고 시작하세요</string>
     <string name="status_running">실행 중</string>
     <string name="status_running_desc">새로고침하다가 취소표가 뜨면 예매 화면까지 이어 줍니다</string>
+    <string name="status_paused">잠시 쉬는 중</string>
+    <string name="status_paused_desc">코레일톡 경고로 멈췄어요. %1$d분 뒤 다시 시작할 수 있어요</string>
     <string name="status_locked">잠김</string>
     <string name="status_locked_desc">승인을 받으면 시작할 수 있어요</string>
     <string name="action_start">시작</string>
@@ -64,6 +68,8 @@
     <string name="popup_title">팝업</string>
     <string name="intermediate_stop_title">정차 안내 자동 확인</string>
     <string name="intermediate_stop_desc">정차 안내 팝업이 뜨면 「확인」을 대신 눌러 예매를 이어갑니다</string>
+    <string name="accessibility_banner_title">접근성 권한이 꺼져 있어요</string>
+    <string name="accessibility_banner_desc">켜기 전에는 매크로가 코레일톡 화면을 읽지 못해요</string>
     <string name="accessibility_title">접근성 권한</string>
     <string name="accessibility_desc">설정 열기 → 설치된 앱 → ktx-tget 켜기 → 허용</string>
     <string name="accessibility_desc_on">켜져 있어요</string>

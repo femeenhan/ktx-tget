@@ -103,7 +103,7 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
 
-private enum class MacroState { LOCKED, IDLE, RUNNING }
+private enum class MacroState { LOCKED, PAUSED, IDLE, RUNNING }
 
 private const val RECENT_LOG_COUNT: Int = 4
 
@@ -120,11 +120,30 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
     val refreshMs: Long by repository.refreshIntervalMs.collectAsStateWithLifecycle(
         initialValue = MacroPreferencesRepository.MIN_REFRESH_MS,
     )
+    val pausedUntil: Long by repository.pausedUntilWallMs.collectAsStateWithLifecycle(initialValue = 0L)
+    var nowWall: Long by remember { mutableStateOf(System.currentTimeMillis()) }
+    // 쉬는 중에는 남은 분이 줄어드는 것이 보이도록 30초마다 시계를 갱신한다.
+    LaunchedEffect(pausedUntil) {
+        while (isActive && pausedUntil > System.currentTimeMillis()) {
+            nowWall = System.currentTimeMillis()
+            delay(30_000)
+        }
+        nowWall = System.currentTimeMillis()
+    }
+    val pausedRemainingMin: Long = ((pausedUntil - nowWall + 59_999L) / 60_000L).coerceAtLeast(0L)
     fun dismissKeyboard() {
         focusManager.clearFocus()
         keyboardController?.hide()
     }
     val licenseSnapshot: LicenseSnapshot? by LicenseManager.snapshot.collectAsStateWithLifecycle()
+    var accessibilityEnabled: Boolean by remember {
+        mutableStateOf(AccessibilitySettings.isServiceEnabled(context))
+    }
+    // 접근성 권한이 꺼져 있으면 매크로가 아예 못 돈다. 설정 앱에서 돌아올 때마다 다시 읽는다.
+    LifecycleResumeEffect(Unit) {
+        accessibilityEnabled = AccessibilitySettings.isServiceEnabled(context)
+        onPauseOrDispose { }
+    }
     val isMacroAllowed: Boolean =
         BuildConfig.DEBUG || LicenseDecision.isLicensed(licenseSnapshot, System.currentTimeMillis())
     val deviceId: String = remember { DeviceLicense.readDeviceId(context) }
@@ -192,6 +211,7 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
     }
     fun startMacro() {
         scope.launch {
+            if (repository.readPausedUntilWallMs() > System.currentTimeMillis()) return@launch
             repository.setMacroEnabled(true)
             MacroForegroundService.start(context)
         }
@@ -205,6 +225,7 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
     val state: MacroState = when {
         !isMacroAllowed -> MacroState.LOCKED
         macroEnabled -> MacroState.RUNNING
+        pausedRemainingMin > 0L -> MacroState.PAUSED
         else -> MacroState.IDLE
     }
     Column(
@@ -220,9 +241,13 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
         if (update != null && update.versionCode > BuildConfig.VERSION_CODE) {
             UpdateBanner(versionName = update.versionName, onDownload = { openUrl(context, update.url) })
         }
+        if (!accessibilityEnabled) {
+            AccessibilityBanner(onOpen = { AccessibilitySettings.openServiceSettings(context) })
+        }
         HomeHeader(onOpenLog = onOpenLog, onOpenGuide = onOpenGuide)
         StatusPill(
             state = state,
+            pausedMinutes = pausedRemainingMin,
             onStart = {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(
@@ -285,9 +310,8 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
             }
         }
         when (state) {
-            MacroState.LOCKED -> Unit
+            MacroState.LOCKED, MacroState.PAUSED, MacroState.IDLE -> Unit
             MacroState.RUNNING -> RecentLog(onOpenLog = onOpenLog)
-            MacroState.IDLE -> Unit
         }
         Spacer(modifier = Modifier.height(if (state == MacroState.RUNNING) 12.dp else 14.dp))
         RefreshIntervalCard(
@@ -460,17 +484,24 @@ fun UnderlinedLink(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun StatusPill(state: MacroState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun StatusPill(state: MacroState, pausedMinutes: Long, onStart: () -> Unit, onStop: () -> Unit) {
     val shape = RoundedCornerShape(48.dp)
     val container: Modifier = when (state) {
         MacroState.RUNNING -> Modifier.clip(shape).background(Ink)
         MacroState.IDLE -> Modifier.border(LineWidth, Ink, shape)
-        MacroState.LOCKED -> Modifier.dashedBorder(InkMuted, LineWidth, 48.dp)
+        MacroState.LOCKED, MacroState.PAUSED -> Modifier.dashedBorder(InkMuted, LineWidth, 48.dp)
     }
-    val (title, description) = when (state) {
-        MacroState.RUNNING -> R.string.status_running to R.string.status_running_desc
-        MacroState.IDLE -> R.string.status_idle to R.string.status_idle_desc
-        MacroState.LOCKED -> R.string.status_locked to R.string.status_locked_desc
+    val title: Int = when (state) {
+        MacroState.RUNNING -> R.string.status_running
+        MacroState.IDLE -> R.string.status_idle
+        MacroState.PAUSED -> R.string.status_paused
+        MacroState.LOCKED -> R.string.status_locked
+    }
+    val descriptionText: String = when (state) {
+        MacroState.RUNNING -> stringResource(R.string.status_running_desc)
+        MacroState.IDLE -> stringResource(R.string.status_idle_desc)
+        MacroState.PAUSED -> stringResource(R.string.status_paused_desc, pausedMinutes)
+        MacroState.LOCKED -> stringResource(R.string.status_locked_desc)
     }
     val textColor = if (state == MacroState.RUNNING) Sage else Ink
     Row(
@@ -491,7 +522,7 @@ private fun StatusPill(state: MacroState, onStart: () -> Unit, onStop: () -> Uni
                 color = textColor,
             )
             Text(
-                text = stringResource(description),
+                text = descriptionText,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = if (state == MacroState.RUNNING) TrackOnInk else Ink,
@@ -510,7 +541,7 @@ private fun StatusPill(state: MacroState, onStart: () -> Unit, onStop: () -> Uni
                 modifier = Modifier.background(Ink, CircleShape),
                 textColor = Sage,
             )
-            MacroState.LOCKED -> CircleAction(
+            MacroState.LOCKED, MacroState.PAUSED -> CircleAction(
                 text = stringResource(R.string.action_start),
                 onClick = null,
                 modifier = Modifier.dashedBorder(InkMuted, LineWidth, 35.dp),

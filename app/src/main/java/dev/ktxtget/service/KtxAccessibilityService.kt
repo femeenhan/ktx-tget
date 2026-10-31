@@ -10,12 +10,14 @@ import dev.ktxtget.accessibility.BookingSheetReader
 import dev.ktxtget.accessibility.KorailUiSnapshotNotes
 import dev.ktxtget.accessibility.TrainRowLocator
 import dev.ktxtget.data.MacroPreferencesRepository
+import dev.ktxtget.domain.AbnormalAccessDetector
 import dev.ktxtget.domain.BookingSheet
 import dev.ktxtget.domain.InitialOpenSweep
 import dev.ktxtget.domain.KorailLabels
 import dev.ktxtget.domain.MacroFilterEngine
 import dev.ktxtget.domain.MacroSettings
 import dev.ktxtget.domain.PixelRect
+import dev.ktxtget.domain.RefreshJitter
 import dev.ktxtget.domain.SeatOpening
 import dev.ktxtget.domain.SoldOutSignal
 import dev.ktxtget.domain.SoldOutTransitionTracker
@@ -144,12 +146,14 @@ class KtxAccessibilityService : AccessibilityService() {
      * 새로고침 간격은 **주기 시작 시점 기준**이다. 한 주기(새로고침→목록 복귀→판독)에 이미
      * 1초 남짓 걸리므로, 그 뒤에 간격을 통째로 더 쉬면 실제 간격이 설정값보다 1초 이상 길어진다.
      * 주기에 쓴 시간을 빼고 남은 만큼만 쉰다. 다만 코레일에 연타하지 않도록 최소 쉼은 둔다.
+     * 간격은 매번 [RefreshJitter]로 흔들어 등간격 패턴이 남지 않게 한다.
      */
     private suspend fun remainingInterval(cycleStartElapsedMs: Long): Long {
-        val interval: Long = repository.readRefreshIntervalMs().coerceIn(
+        val base: Long = repository.readRefreshIntervalMs().coerceIn(
             MacroPreferencesRepository.MIN_REFRESH_MS,
             MacroPreferencesRepository.MAX_REFRESH_MS,
         )
+        val interval: Long = RefreshJitter.jittered(base)
         val spent: Long = SystemClock.elapsedRealtime() - cycleStartElapsedMs
         return (interval - spent).coerceAtLeast(MIN_CYCLE_GAP_MS)
     }
@@ -487,6 +491,25 @@ class KtxAccessibilityService : AccessibilityService() {
         runtimeLog("error", reason)
     }
 
+    private fun detectAbnormalAccess(root: AccessibilityNodeInfo): String? {
+        val texts: MutableList<String> = mutableListOf()
+        NodeFinder.collectTexts(root, texts)
+        return AbnormalAccessDetector.match(texts)
+    }
+
+    /**
+     * 코레일톡이 비정상 접근·자동화를 경고하면 아무것도 누르지 않고 즉시 멈춘 뒤
+     * [AbnormalAccessDetector.PAUSE_MS] 동안 시작을 막는다. 사용자에게는 알림으로 알린다.
+     */
+    private suspend fun handleAbnormalAccess(warning: String) {
+        val until: Long = System.currentTimeMillis() + AbnormalAccessDetector.PAUSE_MS
+        repository.setPausedUntilWallMs(until)
+        repository.setMacroEnabled(false)
+        val minutes: Long = AbnormalAccessDetector.PAUSE_MS / 60_000L
+        runtimeLog("error", "코레일톡 경고를 감지해 멈췄습니다 — 「$warning」. ${minutes}분 뒤 다시 시작할 수 있습니다.")
+        NotificationHelper.notifyAbnormalAccessPause(applicationContext, minutes)
+    }
+
     /**
      * 열차 행을 탭하면 시트 위에 뜨는 「이용 안내」(산천 연결 운행, 경유 노선 안내 등)의 「확인」.
      * 안내성 팝업이라 본문은 따지지 않는다. 제목 주변에서만 「확인」을 찾는다.
@@ -515,6 +538,10 @@ class KtxAccessibilityService : AccessibilityService() {
         }
         if (!isKorailActiveWindow(root)) {
             runtimeLog("skip", "코레일 앱이 앞에 있지 않습니다")
+            return false
+        }
+        detectAbnormalAccess(root)?.let { warning: String ->
+            handleAbnormalAccess(warning)
             return false
         }
         if (hasTicketConfirmation(root)) {

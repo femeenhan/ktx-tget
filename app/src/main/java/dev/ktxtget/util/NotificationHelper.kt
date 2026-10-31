@@ -33,6 +33,7 @@ import dev.ktxtget.domain.TicketAlertMode
 object NotificationHelper {
     const val NOTIFICATION_ID_RUNNING: Int = 1001
     const val NOTIFICATION_ID_TICKET_ALERT: Int = 1002
+    const val NOTIFICATION_ID_PAUSED: Int = 1003
     const val EXTRA_STOP_TICKET_ALERT: String = "dev.ktxtget.extra.STOP_TICKET_ALERT"
     private const val CHANNEL_MACRO_RUNNING: String = "macro_running"
     private const val CHANNEL_TICKET_ALERT_STRONG: String = "ticket_alert_v2"
@@ -141,6 +142,39 @@ object NotificationHelper {
             TicketAlertMode.OFF -> return
             TicketAlertMode.NORMAL -> triggerNormalAlert(context)
             TicketAlertMode.STRONG -> triggerStrongAlert(context)
+        }
+    }
+
+    /** 코레일톡 경고로 멈췄음을 알린다. 소리는 기본 알림 채널을 따른다. */
+    fun notifyAbnormalAccessPause(context: Context, minutes: Long) {
+        val appContext: Context = context.applicationContext
+        ensureChannels(appContext)
+        val launchIntent: Intent = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentIntent: PendingIntent = PendingIntent.getActivity(
+            appContext,
+            3,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder: NotificationCompat.Builder =
+            NotificationCompat.Builder(appContext, CHANNEL_TICKET_ALERT_NORMAL)
+                .setContentTitle(appContext.getString(R.string.notification_paused_title))
+                .setContentText(appContext.getString(R.string.notification_paused_text, minutes))
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(appContext.getString(R.string.notification_paused_text, minutes)),
+                )
+                .setSmallIcon(R.drawable.ic_stat_seat)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
+        try {
+            NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID_PAUSED, builder.build())
+        } catch (err: SecurityException) {
+            Log.e(TAG, "notify denied", err)
         }
     }
 

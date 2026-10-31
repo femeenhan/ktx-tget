@@ -35,6 +35,7 @@ class MacroPreferencesRepository(
         val TICKET_ALERT_MODE = stringPreferencesKey("ticket_alert_mode")
         val USER_ALERTS_ENABLED = booleanPreferencesKey("user_alerts_enabled")
         val AUTO_CONFIRM_INTERMEDIATE_STOP = booleanPreferencesKey("auto_confirm_intermediate_stop_dialog")
+        val PAUSED_UNTIL_WALL_MS = longPreferencesKey("paused_until_wall_ms")
     }
 
     val macroEnabled: Flow<Boolean> = context.macroDataStore.data.map { p: Preferences ->
@@ -50,8 +51,23 @@ class MacroPreferencesRepository(
         preferencesToMacroSettings(p)
     }
 
+    /** 코레일톡 경고 뒤 쉬는 기한(벽시계 ms). 0이면 쉬지 않는 중. */
+    val pausedUntilWallMs: Flow<Long> = context.macroDataStore.data.map { p: Preferences ->
+        p[PrefsKeys.PAUSED_UNTIL_WALL_MS] ?: 0L
+    }
+
     suspend fun readMacroEnabled(): Boolean {
         return macroEnabled.first()
+    }
+
+    suspend fun readPausedUntilWallMs(): Long {
+        return pausedUntilWallMs.first()
+    }
+
+    suspend fun setPausedUntilWallMs(value: Long) {
+        context.macroDataStore.edit { preferences ->
+            preferences[PrefsKeys.PAUSED_UNTIL_WALL_MS] = value
+        }
     }
 
     suspend fun readRefreshIntervalMs(): Long {
