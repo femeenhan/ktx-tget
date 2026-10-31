@@ -33,3 +33,4 @@ web/node_modules/
 web/.next/
 web/.env*.local
 web/.vercel/
+.vercel
