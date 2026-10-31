@@ -17,6 +17,7 @@ import dev.ktxtget.domain.KorailLabels
 import dev.ktxtget.domain.MacroFilterEngine
 import dev.ktxtget.domain.MacroSettings
 import dev.ktxtget.domain.PixelRect
+import dev.ktxtget.domain.ReservationSignals
 import dev.ktxtget.domain.RefreshJitter
 import dev.ktxtget.domain.SeatOpening
 import dev.ktxtget.domain.SoldOutSignal
@@ -548,6 +549,10 @@ class KtxAccessibilityService : AccessibilityService() {
             handleTicketConfirmationDetected(source)
             return false
         }
+        if (hasReservationDoneNotice(root)) {
+            handleTicketConfirmationDetected("$source:reserved")
+            return false
+        }
         if (tryAutoConfirmPostReserveNotice(root)) {
             return false
         }
@@ -597,6 +602,16 @@ class KtxAccessibilityService : AccessibilityService() {
             .isNotEmpty()
     }
 
+    /**
+     * 「승차권 예약이 완료되었습니다」 안내창. 「승차권 정보 확인」 제목을 덮어 가리므로 따로 본다.
+     * 이 창의 버튼은 「닫기」뿐이라 누르지 않고 알림만 울린다. 결제는 사용자가 한다.
+     */
+    private fun hasReservationDoneNotice(root: AccessibilityNodeInfo): Boolean {
+        val texts: MutableList<String> = mutableListOf()
+        NodeFinder.collectTexts(root, texts)
+        return ReservationSignals.isReservationDone(texts)
+    }
+
     private fun isAwaitingPostReserveConfirmation(): Boolean {
         val deadline: Long = postReserveConfirmDeadlineUptimeMs
         if (deadline == 0L) {
@@ -619,10 +634,11 @@ class KtxAccessibilityService : AccessibilityService() {
             return false
         }
         val target: AccessibilityNodeInfo =
-            NodeFinder.findClickableByLabel(root, KorailUiSnapshotNotes.CONFIRM_LABEL) ?: return false
+            NodeFinder.findFirstClickableByLabels(root, KorailUiSnapshotNotes.POST_RESERVE_DISMISS_LABELS)
+                ?: return false
         val clicked: Boolean = performClick(target)
         if (clicked) {
-            runtimeLog("dialog", "예매 후 안내 팝업 확인")
+            runtimeLog("dialog", "예매 후 안내 팝업 닫음")
         }
         return clicked
     }

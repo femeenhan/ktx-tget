@@ -52,6 +52,12 @@ object KorailUiSnapshotNotes {
     const val CONFIRM_LABEL: String = "확인"
 
     /**
+     * 예매 직후 팝업을 치울 때 누를 수 있는 버튼들. 7.1.x에서 「이용 안내」 예약 완료 창은
+     * 「확인」 대신 「닫기」만 있다(실기 2026-10-31). 앞의 것부터 찾는다.
+     */
+    val POST_RESERVE_DISMISS_LABELS: List<String> = listOf(CONFIRM_LABEL, "닫기")
+
+    /**
      * 새로고침을 누르면 목록 전체가 이 자리표시자로 잠깐 교체된다. 이때는 행이 하나도 없으므로
      * 고정 시간을 기다리지 말고 행이 돌아올 때까지 폴링해야 한다 (실기에서 확인한 실패 원인).
      */
