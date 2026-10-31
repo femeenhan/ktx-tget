@@ -55,7 +55,8 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 ### Vercel 프로젝트
 
 - 팀 `femeenhans-projects`, 프로젝트 **`tget-web`**. 함수 리전 `sin1`(싱가포르, Neon DB와 같은 곳), `web/vercel.json`에 cron(매일 18:00 UTC = 03:00 KST)이 있습니다.
-- 배포는 **CLI**로 합니다. GitHub 연동은 하지 않았습니다.
+- 배포는 **GitHub 연동**으로 합니다(2026-10-31부터). 저장소 `femeenhan/ktx-tget`, 프로덕션 브랜치 `tget-web`, 루트 디렉터리 `web`. `tget-web`에 푸시하면 자동으로 운영 배포되고, 다른 브랜치 푸시는 프리뷰 배포가 됩니다.
+- 급할 때는 CLI로도 올릴 수 있습니다. 프로젝트는 반드시 `tget-web` 하나만 씁니다(다른 프로젝트를 만들면 도메인·환경변수가 없어 404가 납니다).
   ```bash
   cd web
   vercel link --yes --project tget-web --scope femeenhans-projects   # 새 PC에서 처음 한 번
@@ -97,7 +98,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 - [ ] 가비아 CNAME 추가(위 절차)
 - [ ] 은평구청 **통신판매업 신고** → 신고번호를 `/admin/settings`에 입력(푸터에 표시)
 - [ ] `/admin/settings`에 **가격 3종**(1개월·1년·영구)과 **입금 계좌** 입력. 가격이 0이면 앱·랜딩에 「문의」로 보입니다
-- [ ] 랜딩 스크린샷 교체: `web/public/screens/01.png` ~ `04.png`를 실제 화면으로 바꾸고 `vercel deploy --prod`
+- [ ] 랜딩 스크린샷 교체: `web/public/screens/01.png` ~ `04.png`를 실제 화면으로 바꾸고 푸시
 - [ ] 오픈채팅 주소 확인(초기값 `https://open.kakao.com/o/s1cF7MUi`, `/admin/settings`에서 수정)
 - [ ] (선택) Preview용 Neon 브랜치 분리 — 지금은 Preview도 운영 DB를 씁니다. Preview 배포로 시험할 때 주의
 

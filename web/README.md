@@ -16,7 +16,7 @@ pnpm migrate                  # DATABASE_URL에 db/schema.sql 적용 (멱등)
 
 ```
 vercel link --yes --project tget-web --scope femeenhans-projects   # 처음 한 번 (.vercel/은 git 제외)
-vercel deploy --prod                                              # 운영 배포 → https://tget-web.vercel.app, https://tget.bigseasons.co.kr
+vercel deploy --prod                                              # 비상용 수동 운영 배포. 평소엔 tget-web 브랜치 푸시로 자동 배포
 vercel deploy                                                     # Preview 배포 (지금은 운영과 같은 DB를 씀)
 ```
 
