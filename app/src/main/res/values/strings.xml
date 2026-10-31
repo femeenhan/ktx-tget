@@ -75,7 +75,7 @@
     <string name="display_shrink_title">화면 축소</string>
     <string name="display_shrink_desc">선택 사항. 시스템 DPI를 낮추면 한 화면에 더 많은 열차가 들어옵니다</string>
     <string name="display_shrink_apply_title">적용 (DPI 340)</string>
-    <string name="display_shrink_apply_desc">플립5 기준 5개 행이 7개 행으로 늘어납니다</string>
+    <string name="display_shrink_apply_desc">갤럭시 기준 한 화면 5개 행이 7개 행으로 늘어납니다</string>
     <string name="display_shrink_apply_command">adb shell wm density 340</string>
     <string name="display_shrink_reset_title">원복</string>
     <string name="display_shrink_reset_desc">예매가 끝나면 되돌립니다</string>

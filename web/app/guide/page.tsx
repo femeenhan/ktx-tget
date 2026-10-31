@@ -106,7 +106,7 @@ export default async function GuidePage() {
             다른 앱이나 다른 화면으로 가면 멈춥니다.
           </p>
           <h3>화면 축소로 더 많은 열차 보기 <span className="muted small">(선택)</span></h3>
-          <p>휴대폰 화면을 축소하면 한 화면에 들어오는 열차 행이 늘어납니다. 플립5 기준 5행이 6~7행이 됩니다.</p>
+          <p>휴대폰 화면을 축소하면 한 화면에 들어오는 열차 행이 늘어납니다. 갤럭시 기준 한 화면 5행 정도가 6~7행으로 늘어납니다.</p>
           <ul className="dot-list">
             <li>갤럭시: <b>설정 → 디스플레이 → 화면 크기 및 글자 → 화면 축소</b>를 가장 작게.</li>
             <li>픽셀 등: <b>설정 → 디스플레이 → 표시 크기와 텍스트 → 표시 크기</b>를 가장 작게.</li>
@@ -119,7 +119,7 @@ export default async function GuidePage() {
             <li>PC 터미널에서 실행합니다. 앱 홈 맨 아래 「화면 축소」에서도 복사할 수 있습니다.</li>
           </ol>
           <pre className="code-block">adb shell wm density 340</pre>
-          <p>플립5 기준 5행이 7행으로 늘어납니다. 340보다 더 내리면 행이 너무 작아져 목록을 못 읽을 수 있습니다. 예매가 끝나면 되돌리세요.</p>
+          <p>갤럭시 기준 한 화면 5행 정도가 7행으로 늘어납니다. 340보다 더 내리면 행이 너무 작아져 목록을 못 읽을 수 있습니다. 예매가 끝나면 되돌리세요.</p>
           <pre className="code-block">adb shell wm density reset</pre>
         </section>
 
