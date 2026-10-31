@@ -96,7 +96,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 ### 운영 전 할 일
 
 - [ ] 가비아 CNAME 추가(위 절차)
-- [ ] 은평구청 **통신판매업 신고** → 신고번호를 `/admin/settings`에 입력(푸터에 표시)
+- [ ] 매출이 생기면 은평구청 **통신판매업 신고** → 신고번호를 `/admin/settings`에 입력. 비어 있는 동안은 푸터에 해당 줄이 나오지 않습니다
 - [ ] `/admin/settings`에 **가격 3종**(1개월·1년·영구)과 **입금 계좌** 입력. 가격이 0이면 앱·랜딩에 「문의」로 보입니다
 - [ ] 랜딩 스크린샷 교체: `web/public/screens/01.png` ~ `04.png`를 실제 화면으로 바꾸고 푸시
 - [ ] 오픈채팅 주소 확인(초기값 `https://open.kakao.com/o/s1cF7MUi`, `/admin/settings`에서 수정)

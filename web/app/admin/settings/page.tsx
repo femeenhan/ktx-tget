@@ -10,7 +10,7 @@ const FIELDS: [string, string][] = [
   ['price_year', '1년 가격(원)'],
   ['bank_account', '입금 계좌'],
   ['openchat_url', '오픈채팅 링크'],
-  ['biz_reg_no', '통신판매업 신고번호'],
+  ['biz_reg_no', '통신판매업 신고번호 (비워 두면 푸터에 표시되지 않음)'],
 ];
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
