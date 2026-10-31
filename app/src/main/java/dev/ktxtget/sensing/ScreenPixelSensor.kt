@@ -103,6 +103,8 @@ class ScreenshotTrainListSensor(
             strip.width,
             strip.height,
             SoldOutPixelClassifier.splitYInStrip(row, strip),
+            // 사용자가 `wm density`로 밀도를 바꾸면 글자 픽셀 수가 제곱으로 달라진다.
+            SoldOutPixelClassifier.greyMinPixelsFor(service.resources.displayMetrics.densityDpi),
         )
     }
 

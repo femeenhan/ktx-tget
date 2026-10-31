@@ -31,8 +31,25 @@ object SoldOutPixelClassifier {
     /** 한 셀을 매진으로 볼 최소 픽셀 수. */
     const val MIN_PIXELS: Int = 150
 
-    /** 한 셀을 「좌석 부족」으로 볼 최소 회색 픽셀 수. 라벨이 새어 들어오는 양보다 넉넉히 위. */
+    /**
+     * 한 셀을 「좌석 부족」으로 볼 최소 회색 픽셀 수, [REFERENCE_DENSITY_DPI] 기준.
+     * 라벨이 새어 들어오는 양(196~257px)보다 넉넉히 위, 좌석 부족 셀(1050~1065px)보다 아래.
+     * 글자 픽셀 수는 밀도의 제곱에 비례하므로 실제 판정은 [greyMinPixelsFor]로 환산한 값을 쓴다.
+     * 480dpi면 라벨 누출이 약 510px까지 커져 600을 그대로 쓰면 오검출에 근접한다.
+     */
     const val MIN_GREY_PIXELS: Int = 600
+
+    /** 회색 픽셀 수를 실측한 밀도. 앱의 「화면 축소」가 안내하는 `wm density 340` 상태였다. */
+    const val REFERENCE_DENSITY_DPI: Int = 340
+
+    /** [densityDpi]에서의 좌석 부족 최소 회색 픽셀 수. */
+    fun greyMinPixelsFor(densityDpi: Int): Int {
+        if (densityDpi <= 0) {
+            return MIN_GREY_PIXELS
+        }
+        val scale: Double = densityDpi.toDouble() / REFERENCE_DENSITY_DPI
+        return kotlin.math.round(MIN_GREY_PIXELS * scale * scale).toInt()
+    }
 
     /** [row] 안에서 좌석 상태 글자가 있는 구간의 왼쪽 x. */
     fun valueColumnLeft(row: PixelRect): Int {
@@ -98,13 +115,14 @@ object SoldOutPixelClassifier {
      *
      * [strip]은 [stripWidth] 폭의 ARGB 배열(행 우선)이고, 앞의 [stripWidth] * [splitY] 개가
      * 일반실 칸, 나머지가 특실·우등실 칸이다. [strip]은 재사용 버퍼일 수 있으므로
-     * [stripWidth] * [stripHeight] 개까지만 읽는다.
+     * [stripWidth] * [stripHeight] 개까지만 읽는다. [greyMinPixels]는 [greyMinPixelsFor]로 환산한 값.
      */
     fun classifyStrip(
         strip: IntArray,
         stripWidth: Int,
         stripHeight: Int,
         splitY: Int,
+        greyMinPixels: Int = MIN_GREY_PIXELS,
     ): SoldOutSignal {
         if (stripWidth <= 0 || stripHeight <= 0) {
             return SoldOutSignal(generalSoldOut = false, premiumSoldOut = false)
@@ -125,8 +143,8 @@ object SoldOutPixelClassifier {
             }
         }
         return SoldOutSignal(
-            generalSoldOut = upperRed >= MIN_PIXELS || upperGrey >= MIN_GREY_PIXELS,
-            premiumSoldOut = lowerRed >= MIN_PIXELS || lowerGrey >= MIN_GREY_PIXELS,
+            generalSoldOut = upperRed >= MIN_PIXELS || upperGrey >= greyMinPixels,
+            premiumSoldOut = lowerRed >= MIN_PIXELS || lowerGrey >= greyMinPixels,
         )
     }
 }

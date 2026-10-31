@@ -127,6 +127,34 @@ fun UpdateBanner(versionName: String, onDownload: () -> Unit) {
     }
 }
 
+/**
+ * 접근성 권한이 꺼져 있을 때 홈 맨 위에 두는 안내. 권한이 없으면 아래 모든 설정이 무의미하므로
+ * 업데이트 배너와 같은 줄 모양으로 가장 먼저 보이게 한다.
+ */
+@Composable
+fun AccessibilityBanner(onOpen: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .border(BorderStroke(LineWidth, Ink), NoticeShape)
+            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = stringResource(R.string.accessibility_banner_title),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Ink,
+            )
+            Text(text = stringResource(R.string.accessibility_banner_desc), style = CaptionStyle)
+        }
+        InkButton(text = stringResource(R.string.accessibility_open), onClick = onOpen)
+    }
+}
+
 /** 활성화(또는 연장) 요청 카드. [title]이 null이면 [status]로 제목을 고른다. */
 @Composable
 fun ActivationRequestCard(

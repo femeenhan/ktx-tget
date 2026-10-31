@@ -161,6 +161,32 @@ class SoldOutPixelClassifierTest {
     }
 
     @Test
+    fun `회색 임계값은 밀도의 제곱으로 환산한다`() {
+        // 실측 밀도 340 → 600. 480에서는 라벨 누출이 약 510px이라 600으로는 모자라고, 약 1196이어야 한다.
+        assertEquals(600, SoldOutPixelClassifier.greyMinPixelsFor(340))
+        assertEquals(1196, SoldOutPixelClassifier.greyMinPixelsFor(480))
+        assertEquals(600, SoldOutPixelClassifier.greyMinPixelsFor(0))
+        val image: IntArray = blankImage()
+        paint(image, SHORTAGE_GREY, 915, 850, 1030, 858) // 920px: 340에선 좌석 부족, 480에선 라벨 수준
+        val strip: PixelRect = SoldOutPixelClassifier.stripRect(ROW, WIDTH, HEIGHT)
+        val buffer = IntArray(strip.width * strip.height)
+        for (y: Int in 0 until strip.height) {
+            for (x: Int in 0 until strip.width) {
+                buffer[y * strip.width + x] = image[(strip.top + y) * WIDTH + strip.left + x]
+            }
+        }
+        val splitY: Int = SoldOutPixelClassifier.splitYInStrip(ROW, strip)
+        assertEquals(
+            SoldOutSignal(generalSoldOut = true, premiumSoldOut = false),
+            SoldOutPixelClassifier.classifyStrip(buffer, strip.width, strip.height, splitY, 600),
+        )
+        assertEquals(
+            SoldOutSignal(false, false),
+            SoldOutPixelClassifier.classifyStrip(buffer, strip.width, strip.height, splitY, 1196),
+        )
+    }
+
+    @Test
     fun `입석+좌석의 어두운 글자는 매진이 아니다`() {
         val image: IntArray = blankImage()
         paint(image, STANDING_DARK, 915, 850, 1030, 860)
