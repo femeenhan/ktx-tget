@@ -85,6 +85,10 @@ class KtxAccessibilityService : AccessibilityService() {
     private var blockedCycles: Int = 0
     private val bookingMutex: Mutex = Mutex()
 
+    /** 팝업 「확인」은 한 번에 하나만. 접근성 이벤트마다 코루틴이 떠서 같은 버튼을 4번까지 눌렀다(실기 18:03). */
+    private val dialogMutex: Mutex = Mutex()
+    private var lastDialogClickUptimeMs: Long = 0L
+
     /**
      * 예매 탭이 성공한 뒤 이 시각까지는, 「승차권 정보 확인」을 가리는 안내 팝업의 「확인」을
      * 본문과 무관하게 눌러 준다. 이미 예매가 진행된 뒤라 남은 팝업은 안내성으로 본다. 0이면 비활성.
@@ -516,17 +520,38 @@ class KtxAccessibilityService : AccessibilityService() {
      * 안내성 팝업이라 본문은 따지지 않는다. 제목 주변에서만 「확인」을 찾는다.
      */
     private suspend fun tryConfirmRowNotice(root: AccessibilityNodeInfo): Boolean {
-        val title: AccessibilityNodeInfo =
-            NodeFinder.findNodeByLabel(root, KorailUiSnapshotNotes.ROW_NOTICE_DIALOG_TITLE) ?: return false
-        val target: AccessibilityNodeInfo = NodeFinder.findClickableByLabelNearAnchor(
-            title,
-            KorailUiSnapshotNotes.CONFIRM_LABEL,
-        ) ?: return false
-        val clicked: Boolean = performClick(target)
-        if (clicked) {
-            runtimeLog("dialog", "열차 이용 안내 확인")
+        for (anchorText: String in KorailUiSnapshotNotes.DISMISSABLE_NOTICE_ANCHORS) {
+            val anchor: AccessibilityNodeInfo =
+                NodeFinder.findNodeContainingText(root, anchorText) ?: continue
+            val target: AccessibilityNodeInfo = NodeFinder.findClickableByLabelNearAnchor(
+                anchor,
+                KorailUiSnapshotNotes.CONFIRM_LABEL,
+            ) ?: continue
+            val clicked: Boolean = clickDialogButtonOnce(target)
+            if (clicked) {
+                runtimeLog("dialog", "안내 팝업 확인 — 「$anchorText」")
+                return true
+            }
         }
-        return clicked
+        return false
+    }
+
+    /**
+     * 팝업 버튼을 한 번만 누른다. 동시에 들어온 호출은 뮤텍스로 줄 세우고, 직전 클릭 뒤
+     * [DIALOG_CLICK_COOLDOWN_MS] 안이면 같은 창을 또 누르는 것으로 보고 건너뛴다.
+     */
+    private suspend fun clickDialogButtonOnce(target: AccessibilityNodeInfo): Boolean {
+        return dialogMutex.withLock {
+            val now: Long = SystemClock.uptimeMillis()
+            if (now - lastDialogClickUptimeMs < DIALOG_CLICK_COOLDOWN_MS) {
+                return@withLock false
+            }
+            val clicked: Boolean = performClick(target)
+            if (clicked) {
+                lastDialogClickUptimeMs = now
+            }
+            clicked
+        }
     }
 
     /**
@@ -636,7 +661,7 @@ class KtxAccessibilityService : AccessibilityService() {
         val target: AccessibilityNodeInfo =
             NodeFinder.findFirstClickableByLabels(root, KorailUiSnapshotNotes.POST_RESERVE_DISMISS_LABELS)
                 ?: return false
-        val clicked: Boolean = performClick(target)
+        val clicked: Boolean = clickDialogButtonOnce(target)
         if (clicked) {
             runtimeLog("dialog", "예매 후 안내 팝업 닫음")
         }
@@ -654,7 +679,7 @@ class KtxAccessibilityService : AccessibilityService() {
                 anchor,
                 KorailUiSnapshotNotes.CONFIRM_LABEL,
             ) ?: continue
-            val clicked: Boolean = performClick(target)
+            val clicked: Boolean = clickDialogButtonOnce(target)
             if (clicked) {
                 runtimeLog("dialog", "정차 안내 확인")
                 return true
@@ -702,6 +727,7 @@ class KtxAccessibilityService : AccessibilityService() {
         const val SHEET_CLOSE_BUDGET_MS: Long = 2000L
         const val ROW_NOTICE_SETTLE_MS: Long = 300L
         const val POST_RESERVE_CONFIRM_BUDGET_MS: Long = 15_000L
+        const val DIALOG_CLICK_COOLDOWN_MS: Long = 800L
 
         /** 이만큼 연속으로 새로고침조차 못 하면 매크로를 멈추고 사용자에게 알린다. */
         const val MAX_BLOCKED_CYCLES: Int = 5

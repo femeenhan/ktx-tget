@@ -48,6 +48,20 @@ object KorailUiSnapshotNotes {
      */
     const val ROW_NOTICE_DIALOG_TITLE: String = "이용 안내"
 
+    /**
+     * 언제 떠도 「확인」으로 치워도 되는 안내 팝업. 제목이나 본문에 이 조각이 들어 있으면 그 주변의
+     * 「확인」을 누른다. 실기 2026-10-31: 「KTX 동행자 마일리지 안내」는 「바로 예매」 직후뿐 아니라
+     * 매진 뒤에도 떠서 15초 창 밖에서 막혔고, 매진 결과 창(「…판매되었습니다」)도 「확인」만 누르면 된다.
+     * 「이용 안내」 예약 완료 창은 「닫기」뿐이라 여기 걸려도 안 눌리며, 그 창은 예약 성공으로 따로 본다.
+     */
+    val DISMISSABLE_NOTICE_ANCHORS: List<String> = listOf(
+        ROW_NOTICE_DIALOG_TITLE,
+        "마일리지 안내",
+        "판매되었습니다",
+        "매진되었습니다",
+        "잔여석이 없",
+    )
+
     /** 안내 팝업의 기본 동작 버튼. */
     const val CONFIRM_LABEL: String = "확인"
 
