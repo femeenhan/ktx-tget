@@ -1,7 +1,6 @@
-import { approve, computeStatus, extend, revoke, type DeviceRow, type Plan } from '../../../lib/license';
+import { PLANS, approve, computeStatus, extend, revoke, type DeviceRow, type Plan } from '../../../lib/license';
 import type { Repo } from '../../../lib/repo';
 
-const PLANS: Plan[] = ['lifetime', 'month', 'year'];
 
 function checkPlan(plan: string): asserts plan is Plan {
   if (!PLANS.includes(plan as Plan)) throw new Error('invalid plan');

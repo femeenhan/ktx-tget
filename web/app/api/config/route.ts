@@ -10,7 +10,7 @@ const num = (v: string | undefined) => {
 export async function GET(): Promise<Response> {
   const s = await getRepo().settings.all();
   return Response.json({
-    prices: { lifetime: num(s.price_lifetime), month: num(s.price_month), year: num(s.price_year) },
+    prices: { day: num(s.price_day), lifetime: num(s.price_lifetime), month: num(s.price_month), year: num(s.price_year) },
     bankAccount: s.bank_account ?? '',
     openchatUrl: s.openchat_url ?? '',
     termsUrl: '/terms',

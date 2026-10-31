@@ -42,6 +42,9 @@ describe('addPlan', () => {
     expect(addPlan(d('2026-03-10T00:00:00Z'), 'year')).toEqual(d('2027-03-10T00:00:00Z'));
     expect(addPlan(d('2024-02-29T00:00:00Z'), 'year')).toEqual(d('2025-02-28T00:00:00Z'));
   });
+  it('day is exactly 24 hours', () => {
+    expect(addPlan(d('2026-01-31T15:00:00Z'), 'day')).toEqual(d('2026-02-01T15:00:00Z'));
+  });
   it('lifetime is null', () => {
     expect(addPlan(NOW, 'lifetime')).toBeNull();
   });

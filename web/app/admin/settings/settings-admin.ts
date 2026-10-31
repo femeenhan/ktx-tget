@@ -1,7 +1,7 @@
 import type { Repo } from '../../../lib/repo';
 
-export const SETTING_KEYS = ['price_lifetime', 'price_month', 'price_year', 'bank_account', 'openchat_url', 'notice', 'biz_reg_no'] as const;
-const PRICE_KEYS = new Set(['price_lifetime', 'price_month', 'price_year']);
+export const SETTING_KEYS = ['price_day', 'price_lifetime', 'price_month', 'price_year', 'bank_account', 'openchat_url', 'notice', 'biz_reg_no'] as const;
+const PRICE_KEYS = new Set(['price_day', 'price_lifetime', 'price_month', 'price_year']);
 
 export async function saveSettingsCore(repo: Repo, values: Record<string, string>): Promise<void> {
   const out: [string, string][] = [];

@@ -111,6 +111,7 @@ describe('GET /api/device/status', () => {
 describe('GET /api/config', () => {
   it('settings -> 응답 형식', async () => {
     const repo = getRepo();
+    await repo.settings.set('price_day', '4900');
     await repo.settings.set('price_lifetime', '30000');
     await repo.settings.set('price_month', '3000');
     await repo.settings.set('price_year', 'abc');
@@ -118,7 +119,7 @@ describe('GET /api/config', () => {
     await repo.settings.set('openchat_url', 'https://open.kakao.com/o/x');
     const j = await (await configGet()).json();
     expect(j).toEqual({
-      prices: { lifetime: 30000, month: 3000, year: 0 },
+      prices: { day: 4900, lifetime: 30000, month: 3000, year: 0 },
       bankAccount: '국민 123',
       openchatUrl: 'https://open.kakao.com/o/x',
       termsUrl: '/terms',

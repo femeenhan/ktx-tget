@@ -1,4 +1,7 @@
-export type Plan = 'lifetime' | 'month' | 'year';
+export type Plan = 'day' | 'month' | 'year' | 'lifetime';
+/** 선택지 순서(짧은 것부터). 요청 검증과 관리 화면이 함께 쓴다. */
+export const PLANS: readonly Plan[] = ['day', 'month', 'year', 'lifetime'];
+export const DAY_MS = 24 * 60 * 60 * 1000;
 export type DeviceStatus = 'pending' | 'active' | 'expired' | 'revoked';
 
 export interface DeviceRow {
@@ -27,9 +30,10 @@ function addMonths(from: Date, months: number): Date {
   return d;
 }
 
-/** lifetime → null. month/year는 UTC 달력 기준, 말일로 보정. */
+/** lifetime → null. day는 정확히 24시간. month/year는 UTC 달력 기준, 말일로 보정. */
 export function addPlan(from: Date, plan: Plan): Date | null {
   if (plan === 'lifetime') return null;
+  if (plan === 'day') return new Date(from.getTime() + DAY_MS);
   return addMonths(from, plan === 'month' ? 1 : 12);
 }
 

@@ -22,9 +22,10 @@ export default async function Home() {
   const settings = await loadSettings();
   const contact = contactHref(settings);
   const prices: [string, string][] = [
-    ['영구', formatPrice(settings.price_lifetime)],
+    ['1일 (24시간)', formatPrice(settings.price_day)],
     ['1개월', formatPrice(settings.price_month)],
     ['1년', formatPrice(settings.price_year)],
+    ['영구', formatPrice(settings.price_lifetime)],
   ];
 
   return (

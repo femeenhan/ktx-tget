@@ -17,6 +17,7 @@ data class LicenseSnapshot(
 )
 
 data class AppConfig(
+    val priceDay: Long,
     val priceLifetime: Long,
     val priceMonth: Long,
     val priceYear: Long,

@@ -31,6 +31,7 @@ create table if not exists settings (
 );
 
 insert into settings (key, value) values
+  ('price_day', '0'),
   ('price_lifetime', '0'),
   ('price_month', '0'),
   ('price_year', '0'),

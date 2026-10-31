@@ -55,17 +55,20 @@ import dev.ktxtget.ui.theme.Sage
 import java.util.Locale
 
 private const val DEPOSITOR_MAX_LENGTH: Int = 40
-private const val DAY_MS: Long = 24L * 3600 * 1000
+private const val HOUR_MS: Long = 3600L * 1000
+private const val DAY_MS: Long = 24L * HOUR_MS
 private const val EXPIRY_WARN_MS: Long = 7L * DAY_MS
 private val NoticeShape = RoundedCornerShape(16.dp)
 
 private enum class Plan(val wire: String, val labelRes: Int) {
+    DAY("day", R.string.license_plan_day),
     MONTH("month", R.string.license_plan_month),
     YEAR("year", R.string.license_plan_year),
     LIFETIME("lifetime", R.string.license_plan_lifetime),
 }
 
 private fun AppConfig.priceOf(plan: Plan): Long = when (plan) {
+    Plan.DAY -> priceDay
     Plan.MONTH -> priceMonth
     Plan.YEAR -> priceYear
     Plan.LIFETIME -> priceLifetime
@@ -81,6 +84,14 @@ fun daysLeft(s: LicenseSnapshot, nowWallMs: Long): Long? {
     val left: Long = expires - serverNow(s, nowWallMs)
     if (left <= 0) return 0
     return (left + DAY_MS - 1) / DAY_MS
+}
+
+/** 만료까지 남은 시간(올림, 최소 0). 하루 미만일 때 일수 대신 보여 준다. */
+fun hoursLeft(s: LicenseSnapshot, nowWallMs: Long): Long? {
+    val expires: Long = s.expiresAtEpochMs ?: return null
+    val left: Long = expires - serverNow(s, nowWallMs)
+    if (left <= 0) return 0
+    return (left + HOUR_MS - 1) / HOUR_MS
 }
 
 fun shouldShowExpiryLine(s: LicenseSnapshot, nowWallMs: Long): Boolean {
@@ -412,6 +423,12 @@ fun PendingCard(config: AppConfig?, onCheck: () -> Unit, checking: Boolean) {
 @Composable
 fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, renewOpen: Boolean) {
     val days: Long? = daysLeft(snapshot, nowWallMs)
+    val hours: Long? = hoursLeft(snapshot, nowWallMs)
+    val leftText: String = when {
+        days == null || hours == null -> ""
+        hours <= 24 -> stringResource(R.string.license_hours_left, hours)
+        else -> stringResource(R.string.license_days_left, days)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -420,7 +437,7 @@ fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, 
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = if (days != null) stringResource(R.string.license_days_left, days) else "",
+            text = leftText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = Ink,

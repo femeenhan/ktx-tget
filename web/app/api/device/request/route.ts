@@ -1,10 +1,9 @@
-import { applyRequest, type Plan } from '../../../../lib/license';
+import { PLANS, applyRequest, type Plan } from '../../../../lib/license';
 import { buildStatusResponse, normalizeNotice, parseDeviceId } from '../../../../lib/device-response';
 import { getRepo } from '../../../../lib/repo';
 
 export const dynamic = 'force-dynamic';
 
-const PLANS: Plan[] = ['lifetime', 'month', 'year'];
 const bad = (error: string) => Response.json({ error }, { status: 400 });
 
 export async function POST(req: Request): Promise<Response> {

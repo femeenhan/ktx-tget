@@ -39,6 +39,7 @@ class LicenseApi(baseUrl: String) {
             val json = JSONObject(text)
             val prices: JSONObject = json.getJSONObject("prices")
             AppConfig(
+                priceDay = prices.optLong("day", 0L),
                 priceLifetime = prices.getLong("lifetime"),
                 priceMonth = prices.getLong("month"),
                 priceYear = prices.getLong("year"),

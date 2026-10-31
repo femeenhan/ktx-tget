@@ -2,6 +2,7 @@ import type { DeviceRow } from './license';
 import type { ReleaseRow, Repo } from './repo';
 
 const DEFAULT_SETTINGS: Record<string, string> = {
+  price_day: '0',
   price_lifetime: '0',
   price_month: '0',
   price_year: '0',

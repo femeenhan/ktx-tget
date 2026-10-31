@@ -105,6 +105,7 @@
     <string name="license_depositor_label">입금자명</string>
     <string name="license_depositor_hint">입금할 때 쓸 이름</string>
     <string name="license_plan_label">기간</string>
+    <string name="license_plan_day">1일 (24시간)</string>
     <string name="license_plan_month">1개월</string>
     <string name="license_plan_year">1년</string>
     <string name="license_plan_lifetime">영구</string>
@@ -128,6 +129,7 @@
     <string name="license_check_again">다시 확인</string>
     <string name="license_checking">확인 중…</string>
     <string name="license_days_left">%1$d일 남음</string>
+    <string name="license_hours_left">%1$d시간 남음</string>
     <string name="license_renew">연장 요청</string>
     <string name="license_renew_close">닫기</string>
     <string name="license_renewal_pending">연장 승인 대기</string>

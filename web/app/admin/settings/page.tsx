@@ -4,6 +4,7 @@ import { saveSettings } from './actions';
 export const dynamic = 'force-dynamic';
 
 const FIELDS: [string, string][] = [
+  ['price_day', '1일(24시간) 가격(원)'],
   ['price_lifetime', '영구 가격(원)'],
   ['price_month', '1개월 가격(원)'],
   ['price_year', '1년 가격(원)'],
