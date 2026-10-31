@@ -24,6 +24,12 @@ class SoldOutPixelClassifierTest {
         /** 「마감임박」 모래시계 이모지 — 매진과 완전히 같은 색이라 위치로만 구분된다. */
         const val HOURGLASS_RED: Int = 0xFFFF5359.toInt()
 
+        /** 「좌석 부족」 글자색 (코레일톡 7.1.0 실측, 2026-10-31 SM-F731N). 「일반실/특실」 라벨과 같은 회색. */
+        const val SHORTAGE_GREY: Int = 0xFF707177.toInt()
+
+        /** 「입석+좌석」 글자색 (코레일톡 7.1.0 실측). */
+        const val STANDING_DARK: Int = 0xFF10131C.toInt()
+
         /** 「M 5%적립」 배지 주황. */
         const val REWARD_BADGE: Int = 0xFFD45F08.toInt()
 
@@ -131,6 +137,33 @@ class SoldOutPixelClassifierTest {
         val image: IntArray = blankImage()
         paint(image, REWARD_BADGE, 860, 900, 1030, 940)
         paint(image, DISCOUNT_GREEN, 860, 1040, 1030, 1080)
+        assertEquals(SoldOutSignal(false, false), classify(image))
+    }
+
+    @Test
+    fun `좌석 부족 회색은 매진으로 센다`() {
+        // 실측: 좌석 부족 셀은 회색 1050~1065px. 매진↔좌석 부족이 번갈아 떠도 전이가 아니어야 한다.
+        assertTrue(SoldOutPixelClassifier.isUnavailableGrey(SHORTAGE_GREY))
+        assertFalse(SoldOutPixelClassifier.isUnavailableGrey(STANDING_DARK))
+        assertFalse(SoldOutPixelClassifier.isUnavailableGrey(SOLD_OUT_RED_710))
+        val image: IntArray = blankImage()
+        paint(image, SHORTAGE_GREY, 915, 850, 1030, 860) // 1150px, 위 칸
+        assertEquals(SoldOutSignal(generalSoldOut = true, premiumSoldOut = false), classify(image))
+    }
+
+    @Test
+    fun `띠에 걸친 일반실 특실 라벨의 회색은 좌석 부족으로 오인하지 않는다`() {
+        // 실측: 라벨 끝이 띠에 196~257px 새어 들어온다. 300px까지는 무시해야 한다.
+        val image: IntArray = blankImage()
+        paint(image, SHORTAGE_GREY, 840, 850, 870, 860) // 300px, 위 칸
+        paint(image, SHORTAGE_GREY, 840, 1000, 870, 1010) // 300px, 아래 칸
+        assertEquals(SoldOutSignal(false, false), classify(image))
+    }
+
+    @Test
+    fun `입석+좌석의 어두운 글자는 매진이 아니다`() {
+        val image: IntArray = blankImage()
+        paint(image, STANDING_DARK, 915, 850, 1030, 860)
         assertEquals(SoldOutSignal(false, false), classify(image))
     }
 

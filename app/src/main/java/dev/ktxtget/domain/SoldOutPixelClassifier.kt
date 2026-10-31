@@ -15,6 +15,10 @@ package dev.ktxtget.domain
  *   두 셀이 각각 위/아래 절반 안에 머문다.
  *
  * 검증 시 매진 셀은 1000px 이상, 비매진 셀은 0px이 나왔다. [MIN_PIXELS]는 그 사이의 여유값이다.
+ * - 「좌석 부족」(인원수보다 남은 좌석이 적음)은 회색 [isUnavailableGrey] 글자다. 매진과 번갈아 뜨면
+ *   전이로 오인돼 탭·시트 닫기를 반복하므로, 이 글자도 「살 수 없음」=매진으로 친다.
+ *   같은 회색인 「일반실/특실」 라벨 끝이 띠에 조금 걸치므로(실측 196~257px) 임계값을
+ *   [MIN_GREY_PIXELS]로 따로 높게 둔다. 좌석 부족 셀은 1050~1065px(코레일톡 7.1.0 실측).
  *
  * **화면 전체가 아니라 [valueColumnLeft] 오른쪽 좁은 띠만 읽는다.** 전체를 IntArray로 뜨면
  * 1080x2640 기준 한 번에 11MB라 몇 주기 만에 힙이 터진다(실기에서 실제로 OOM 크래시 발생).
@@ -26,6 +30,9 @@ object SoldOutPixelClassifier {
 
     /** 한 셀을 매진으로 볼 최소 픽셀 수. */
     const val MIN_PIXELS: Int = 150
+
+    /** 한 셀을 「좌석 부족」으로 볼 최소 회색 픽셀 수. 라벨이 새어 들어오는 양보다 넉넉히 위. */
+    const val MIN_GREY_PIXELS: Int = 600
 
     /** [row] 안에서 좌석 상태 글자가 있는 구간의 왼쪽 x. */
     fun valueColumnLeft(row: PixelRect): Int {
@@ -75,7 +82,19 @@ object SoldOutPixelClassifier {
     }
 
     /**
+     * 「좌석 부족」 글자색 판정. 코레일톡 7.1.0 실측 (112,113,119), 2026-10-31 SM-F731N.
+     * 「입석+좌석」·가격은 훨씬 어두운 (16,19,28)이라 겹치지 않는다.
+     */
+    fun isUnavailableGrey(argb: Int): Boolean {
+        val r: Int = (argb shr 16) and 0xFF
+        val g: Int = (argb shr 8) and 0xFF
+        val b: Int = argb and 0xFF
+        return r in 100..124 && g in 101..125 && b in 107..131
+    }
+
+    /**
      * 한 행의 값 컬럼 띠를 보고 위/아래 칸의 매진 여부를 판정한다.
+     * 「좌석 부족」 회색도 매진으로 센다 — [isUnavailableGrey] 참고.
      *
      * [strip]은 [stripWidth] 폭의 ARGB 배열(행 우선)이고, 앞의 [stripWidth] * [splitY] 개가
      * 일반실 칸, 나머지가 특실·우등실 칸이다. [strip]은 재사용 버퍼일 수 있으므로
@@ -93,21 +112,21 @@ object SoldOutPixelClassifier {
         val boundary: Int = splitY.coerceIn(0, stripHeight)
         val total: Int = minOf(stripWidth * stripHeight, strip.size)
         val splitIndex: Int = minOf(stripWidth * boundary, total)
-        var upper: Int = 0
-        var lower: Int = 0
+        var upperRed: Int = 0
+        var lowerRed: Int = 0
+        var upperGrey: Int = 0
+        var lowerGrey: Int = 0
         for (i: Int in 0 until total) {
-            if (!isSoldOutRed(strip[i])) {
-                continue
-            }
-            if (i < splitIndex) {
-                upper++
-            } else {
-                lower++
+            val argb: Int = strip[i]
+            if (isSoldOutRed(argb)) {
+                if (i < splitIndex) upperRed++ else lowerRed++
+            } else if (isUnavailableGrey(argb)) {
+                if (i < splitIndex) upperGrey++ else lowerGrey++
             }
         }
         return SoldOutSignal(
-            generalSoldOut = upper >= MIN_PIXELS,
-            premiumSoldOut = lower >= MIN_PIXELS,
+            generalSoldOut = upperRed >= MIN_PIXELS || upperGrey >= MIN_GREY_PIXELS,
+            premiumSoldOut = lowerRed >= MIN_PIXELS || lowerGrey >= MIN_GREY_PIXELS,
         )
     }
 }
