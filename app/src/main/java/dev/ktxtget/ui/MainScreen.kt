@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,10 +69,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ktxtget.R
 import dev.ktxtget.data.MacroPreferencesRepository
 import dev.ktxtget.domain.MacroSettings
+import dev.ktxtget.util.AccessibilitySettings
 import dev.ktxtget.domain.SeatClickPreference
 import dev.ktxtget.domain.TicketAlertMode
 import dev.ktxtget.domain.TrainExcludeNumbersParser
@@ -395,7 +396,8 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit) {
             },
         )
         AccessibilityRow(
-            onOpen = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+            onOpen = { AccessibilitySettings.openServiceSettings(context) },
+            onOpenAppInfo = { AccessibilitySettings.openAppInfo(context) },
         )
         Spacer(modifier = Modifier.height(26.dp))
         DisplayShrinkSection(
@@ -818,7 +820,14 @@ private fun TrainChip(number: String, onRemove: () -> Unit) {
 }
 
 @Composable
-private fun AccessibilityRow(onOpen: () -> Unit) {
+private fun AccessibilityRow(onOpen: () -> Unit, onOpenAppInfo: () -> Unit) {
+    val context = LocalContext.current
+    var enabled: Boolean by remember { mutableStateOf(AccessibilitySettings.isServiceEnabled(context)) }
+    // 설정 앱에서 돌아올 때마다 다시 읽는다.
+    LifecycleResumeEffect(Unit) {
+        enabled = AccessibilitySettings.isServiceEnabled(context)
+        onPauseOrDispose { }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -829,9 +838,28 @@ private fun AccessibilityRow(onOpen: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(text = stringResource(R.string.accessibility_title), fontSize = 16.sp, color = Ink)
-            Text(text = stringResource(R.string.accessibility_desc), style = CaptionStyle)
+            Text(
+                text = stringResource(if (enabled) R.string.accessibility_desc_on else R.string.accessibility_desc),
+                style = CaptionStyle,
+            )
         }
-        LineButton(text = stringResource(R.string.accessibility_open), onClick = onOpen)
+        if (!enabled) LineButton(text = stringResource(R.string.accessibility_open), onClick = onOpen)
+    }
+    if (!enabled) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.accessibility_restricted_hint),
+                style = CaptionStyle,
+                modifier = Modifier.weight(1f),
+            )
+            LineButton(text = stringResource(R.string.accessibility_app_info), onClick = onOpenAppInfo)
+        }
     }
     RowDivider()
 }
