@@ -73,10 +73,23 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 | `ADMIN_PASSWORD` | 직접 생성 | `/admin` 로그인 비밀번호 |
 | `SESSION_SECRET` | 직접 생성 | 관리자 쿠키 서명 키. 바꾸면 모든 로그인 해제 |
 | `CRON_SECRET` | 직접 생성 | Vercel Cron이 `Authorization: Bearer`로 보냄 |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | 텔레그램 | 활성화·연장 요청이 오면 판매자에게 텔레그램 알림. 없으면 알림만 건너뜀 |
 
 - 직접 생성한 세 값은 **`~/keystores/tget-web-secrets.txt`**(권한 600)에 있습니다. 1Password 등에 옮겨 두세요.
 - 이 셋은 Vercel에서 민감(sensitive) 변수라 `vercel env pull`로 값이 내려오지 않습니다(빈 값). 로컬에서 쓰려면 위 파일에서 복사합니다.
 - 값을 바꿀 때: `printf '%s' "새값" | vercel env add ADMIN_PASSWORD production --force` (preview도 같은 방식) 후 `vercel deploy --prod`.
+
+### 요청 알림(텔레그램)과 임시 이용
+
+- 앱에서 활성화·연장 요청이 오면 서버가 `/api/device/request` 처리 직후 텔레그램으로 「입금자명·기간·가격·기기 앞 6자·승인 링크」를 보냅니다. 휴대폰에서 알림의 링크를 눌러 `/admin/devices`에서 바로 승인하면 됩니다.
+- 설정: 텔레그램에서 `@BotFather` → `/newbot`으로 봇을 만들고 토큰을 받습니다. 그 봇에게 아무 메시지를 한 번 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates`를 열어 `chat.id`를 읽습니다. 두 값을 Vercel에 넣습니다.
+  ```bash
+  cd web
+  printf '%s' "<토큰>" | vercel env add TELEGRAM_BOT_TOKEN production --sensitive
+  printf '%s' "<chat id>" | vercel env add TELEGRAM_CHAT_ID production
+  vercel redeploy --prod   # 또는 아무 커밋을 tget-web에 푸시
+  ```
+- 임시 이용: 기기가 **처음** 요청을 보내면 입금 확인 전에도 **1시간**(`TRIAL_MS`) 동안 바로 쓸 수 있습니다. 관리자 목록에는 「대기 · 임시 이용 중」과 끝나는 시각이 보이고, 그 안에 승인하면 정식 기간으로 이어집니다. 1시간이 지나면 앱이 「승인 대기 중」으로 잠깁니다. 만료·회수 뒤 다시 요청하는 기기에는 주지 않습니다.
 
 ### 가비아 DNS (tget.bigseasons.co.kr)
 

@@ -1,4 +1,6 @@
+import { after } from 'next/server';
 import { PLANS, applyRequest, type Plan } from '../../../../lib/license';
+import { formatRequestMessage, sendTelegram } from '../../../../lib/notify';
 import { buildStatusResponse, normalizeNotice, parseDeviceId } from '../../../../lib/device-response';
 import { getRepo } from '../../../../lib/repo';
 
@@ -31,6 +33,13 @@ export async function POST(req: Request): Promise<Response> {
     deviceId, depositor, plan: body.plan as Plan, versionCode, now,
   });
   await repo.devices.upsert(row);
-  const notice = normalizeNotice((await repo.settings.all()).notice);
-  return Response.json(buildStatusResponse(row, now, notice));
+  const settings = await repo.settings.all();
+  const notify = () => sendTelegram(formatRequestMessage(row, settings, now));
+  // 응답을 먼저 보내고 알림은 뒤에. 테스트처럼 요청 범위 밖이면 after가 던지므로 바로 실행한다.
+  try {
+    after(notify);
+  } catch {
+    void notify();
+  }
+  return Response.json(buildStatusResponse(row, now, normalizeNotice(settings.notice)));
 }

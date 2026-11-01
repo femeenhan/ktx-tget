@@ -77,7 +77,7 @@ export default async function Home() {
                 <div key={label}><dt>{label}</dt><dd>{price}</dd></div>
               ))}
             </dl>
-            <p className="price-note muted small">계좌이체 후 앱에서 활성화 요청 → 입금 확인 뒤 승인</p>
+            <p className="price-note muted small">앱에서 활성화 요청 → 요청 즉시 1시간 임시 이용 → 계좌이체 → 입금 확인 뒤 승인. 입금 계좌는 앱의 요청 카드에 보입니다.</p>
           </div>
         </div>
       </section>

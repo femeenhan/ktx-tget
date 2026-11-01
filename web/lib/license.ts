@@ -2,6 +2,12 @@ export type Plan = 'day' | 'month' | 'year' | 'lifetime';
 /** 선택지 순서(짧은 것부터). 요청 검증과 관리 화면이 함께 쓴다. */
 export const PLANS: readonly Plan[] = ['day', 'month', 'year', 'lifetime'];
 export const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * 임시 이용 시간. 기기가 처음 활성화를 요청하면 입금 확인 전에도 이만큼은 바로 쓸 수 있게 한다.
+ * 판매자가 입금을 확인해 승인하기까지의 지연(외출 등)을 구매자가 기다리지 않게 하려는 것이다.
+ * 기기 ID당 한 번뿐이다(행이 새로 만들어질 때만). 만료·회수 뒤 다시 요청해도 주지 않는다.
+ */
+export const TRIAL_MS = 60 * 60 * 1000;
 export type DeviceStatus = 'pending' | 'active' | 'expired' | 'revoked';
 
 export interface DeviceRow {
@@ -42,6 +48,17 @@ export function computeStatus(row: DeviceRow, now: Date): DeviceStatus {
   return row.status;
 }
 
+/**
+ * 대기(pending) 행의 expiresAt은 임시 이용이 끝나는 시각이다(승인 전까지 다른 뜻이 없다).
+ * 승인되면 approve가 정식 만료일로 덮어쓴다. 지난 뒤에도 값은 남아 「이미 임시 이용을 받은 기기」임을 알려 준다.
+ */
+export const trialUntil = (row: DeviceRow): Date | null => (row.status === 'pending' ? row.expiresAt : null);
+
+export function isTrialActive(row: DeviceRow, now: Date): boolean {
+  const until = trialUntil(row);
+  return until !== null && until > now;
+}
+
 export function applyRequest(
   row: DeviceRow | null,
   input: { deviceId: string; depositor: string; plan: Plan; versionCode: number; now: Date },
@@ -54,7 +71,7 @@ export function applyRequest(
       requestedPlan: plan,
       pendingPlan: null,
       status: 'pending',
-      expiresAt: null,
+      expiresAt: new Date(now.getTime() + TRIAL_MS),
       agreedAt: now,
       note: null,
       appVersion: versionCode,

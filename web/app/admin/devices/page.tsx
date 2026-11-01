@@ -1,3 +1,4 @@
+import { isTrialActive } from '../../../lib/license';
 import { getRepo } from '../../../lib/repo';
 import { countPending, isRenewal, sortDevices } from './device-list';
 import { DeviceRowView } from './device-row';
@@ -26,6 +27,7 @@ export default async function DevicesPage() {
           {items.map((item) => {
             const { row, status } = item;
             const renew = isRenewal(item);
+            const trial = isTrialActive(row, now);
             return (
             <DeviceRowView
               key={row.deviceId}
@@ -37,7 +39,12 @@ export default async function DevicesPage() {
               requestedPlanLabel={renew && row.pendingPlan ? `연장: ${PLAN_LABEL[row.pendingPlan]}` : PLAN_LABEL[row.requestedPlan]}
               requestedPlan={row.requestedPlan}
               pendingPlan={row.pendingPlan}
-              expiresAt={status === 'pending' || status === 'revoked' ? '-' : row.expiresAt ? formatKst(row.expiresAt) : '영구'}
+              trial={trial}
+              expiresAt={
+                trial && row.expiresAt ? `임시 ${formatKst(row.expiresAt)}`
+                  : status === 'pending' || status === 'revoked' ? '-'
+                    : row.expiresAt ? formatKst(row.expiresAt) : '영구'
+              }
               note={row.note ?? ''}
             />
             );

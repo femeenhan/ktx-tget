@@ -13,6 +13,8 @@ interface Props {
   requestedPlanLabel: string;
   requestedPlan: Plan;
   pendingPlan: Plan | null;
+  /** 입금 확인 전 임시 이용 중(대기 행). expiresAt에 끝나는 시각이 들어 있다. */
+  trial: boolean;
   expiresAt: string;
   note: string;
 }
@@ -44,6 +46,7 @@ export function DeviceRowView(p: Props) {
       <td>
         {p.statusLabel}
         {(p.status === 'active' || p.status === 'expired') && p.pendingPlan && <> <span className="badge">연장 요청</span></>}
+        {p.trial && <> <span className="badge">임시 이용 중</span></>}
       </td>
       <td>{p.expiresAt}</td>
       <td>

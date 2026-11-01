@@ -5,6 +5,9 @@ import {
   approve,
   computeStatus,
   extend,
+  isTrialActive,
+  TRIAL_MS,
+  trialUntil,
   revoke,
   type DeviceRow,
 } from './license';
@@ -66,14 +69,14 @@ describe('computeStatus', () => {
 });
 
 describe('applyRequest', () => {
-  it('null creates pending', () => {
+  it('null creates pending with trial window', () => {
     expect(applyRequest(null, input)).toEqual({
       deviceId: 'dev1',
       depositor: '김철수',
       requestedPlan: 'year',
       pendingPlan: null,
       status: 'pending',
-      expiresAt: null,
+      expiresAt: new Date(NOW.getTime() + TRIAL_MS),
       agreedAt: NOW,
       note: null,
       appVersion: 7,
@@ -125,6 +128,36 @@ describe('applyRequest', () => {
     const base = row();
     applyRequest(base, input);
     expect(base).toEqual(row());
+  });
+});
+
+describe('trial (임시 이용)', () => {
+  it('새 기기의 첫 요청은 TRIAL_MS 동안 임시 이용', () => {
+    const r = applyRequest(null, input);
+    expect(r.status).toBe('pending');
+    expect(trialUntil(r)?.getTime()).toBe(NOW.getTime() + TRIAL_MS);
+    expect(isTrialActive(r, NOW)).toBe(true);
+    expect(isTrialActive(r, new Date(NOW.getTime() + TRIAL_MS))).toBe(false);
+    expect(computeStatus(r, new Date(NOW.getTime() + TRIAL_MS))).toBe('pending');
+  });
+  it('대기 중 다시 요청해도 임시 이용 시각은 그대로', () => {
+    const first = applyRequest(null, input);
+    const again = applyRequest(first, { ...input, now: new Date(NOW.getTime() + 10 * 60_000) });
+    expect(trialUntil(again)).toEqual(trialUntil(first));
+  });
+  it('만료·회수 뒤 다시 요청하면 임시 이용 없음', () => {
+    const expired = row({ status: 'active', expiresAt: d('2026-02-01T00:00:00Z') });
+    expect(trialUntil(applyRequest(expired, input))).toBeNull();
+    const revoked = row({ status: 'revoked', revokedAt: NOW });
+    expect(trialUntil(applyRequest(revoked, input))).toBeNull();
+  });
+  it('승인되면 정식 만료일로 바뀌고 trial이 아니다', () => {
+    const r = approve(applyRequest(null, input), 'day', NOW);
+    expect(trialUntil(r)).toBeNull();
+    expect(r.expiresAt?.getTime()).toBe(NOW.getTime() + 24 * 3600_000);
+  });
+  it('활성·회수 행에는 trial이 없다', () => {
+    expect(trialUntil(row({ status: 'active', expiresAt: d('2030-01-01T00:00:00Z') }))).toBeNull();
   });
 });
 

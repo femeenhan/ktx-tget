@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getRepo, resetRepoForTests } from '../../../lib/repo';
-import { approve } from '../../../lib/license';
+import { approve, TRIAL_MS } from '../../../lib/license';
+import { formatRequestMessage } from '../../../lib/notify';
 import { POST as requestPost } from './request/route';
 import { GET as statusGet } from './status/route';
 import { GET as configGet } from '../config/route';
@@ -45,14 +46,61 @@ describe('POST /api/device/request', () => {
     expect((await post({ ...valid, versionCode: 0 })).status).toBe(400);
     expect((await post({ ...valid, versionCode: 1.5 })).status).toBe(400);
   });
-  it('정상 요청 -> pending, 소문자/trim 정규화', async () => {
+  it('정상 첫 요청 -> 임시 이용(active+trial), 소문자/trim 정규화', async () => {
+    const before = Date.now();
     const res = await post({ ...valid, deviceId: `  ${ID.toUpperCase()} ` });
     expect(res.status).toBe(200);
     const j = await res.json();
-    expect(j.status).toBe('pending');
+    expect(j.status).toBe('active');
+    expect(j.trial).toBe(true);
     expect(j.renewalPending).toBe(false);
-    expect(j.expiresAt).toBeNull();
-    expect(await getRepo().devices.get(ID)).not.toBeNull();
+    const until = new Date(j.expiresAt).getTime();
+    expect(until).toBeGreaterThanOrEqual(before + TRIAL_MS);
+    expect(until).toBeLessThan(before + TRIAL_MS + 60_000);
+    const row = (await getRepo().devices.get(ID))!;
+    expect(row.status).toBe('pending');
+  });
+  it('임시 이용이 끝나면 pending으로 보이고 expiresAt은 null', async () => {
+    await post(valid);
+    const repo = getRepo();
+    const row = (await repo.devices.get(ID))!;
+    await repo.devices.upsert({ ...row, expiresAt: new Date(Date.now() - 1000) });
+    const j = await (await status(`deviceId=${ID}`)).json();
+    expect(j).toMatchObject({ status: 'pending', trial: false, expiresAt: null });
+  });
+  it('임시 이용 중 승인하면 정식 기간으로 바뀜', async () => {
+    await post({ ...valid, plan: 'day' });
+    const repo = getRepo();
+    const now = new Date();
+    await repo.devices.upsert(approve((await repo.devices.get(ID))!, 'day', now));
+    const j = await (await status(`deviceId=${ID}`)).json();
+    expect(j.status).toBe('active');
+    expect(j.trial).toBe(false);
+    expect(new Date(j.expiresAt).getTime()).toBe(now.getTime() + 24 * 3600_000);
+  });
+  it('텔레그램 본문: 활성화 요청에 입금자명·기간·가격·임시 이용 종료 시각', async () => {
+    await getRepo().settings.set('price_day', '4900');
+    await post({ ...valid, plan: 'day' });
+    const row = (await getRepo().devices.get(ID))!;
+    const msg = formatRequestMessage(row, await getRepo().settings.all(), new Date());
+    expect(msg).toContain('활성화 요청');
+    expect(msg).toContain('홍길동');
+    expect(msg).toContain('1일 4,900원');
+    expect(msg).toContain(ID.slice(0, 6));
+    expect(msg).toContain('임시 이용 중');
+    expect(msg).toContain('/admin/devices');
+  });
+  it('텔레그램 본문: 연장 요청은 pendingPlan 기준', async () => {
+    await post(valid);
+    const repo = getRepo();
+    const active = approve((await repo.devices.get(ID))!, 'month', new Date());
+    await repo.devices.upsert(active);
+    await post({ ...valid, plan: 'year' });
+    const row = (await repo.devices.get(ID))!;
+    const msg = formatRequestMessage(row, {}, new Date());
+    expect(msg).toContain('연장 요청');
+    expect(msg).toContain('기간: 1년');
+    expect(msg).not.toContain('임시 이용');
   });
 });
 
