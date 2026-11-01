@@ -79,3 +79,13 @@ describe('device-admin', () => {
     await expect(approveDeviceCore(repo, ID, 'week' as never, NOW)).rejects.toThrow('invalid plan');
   });
 });
+
+describe('통계 이벤트', () => {
+  it('승인은 approve/new, 연장은 approve/extend로 남는다', async () => {
+    const repo = await setup(row());
+    await approveDeviceCore(repo, ID, 'day', NOW);
+    await extendDeviceCore(repo, ID, 'month', NOW);
+    const ev = await repo.events.list(new Date(0));
+    expect(ev.map((e) => [e.kind, e.path, e.ref])).toEqual([['approve', 'new', 'day'], ['approve', 'extend', 'month']]);
+  });
+});

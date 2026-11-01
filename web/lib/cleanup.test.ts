@@ -55,7 +55,10 @@ describe('runCleanup', () => {
     await repo.devices.upsert(row({ deviceId: 'keep', approvedAt: ago(31), note: '메모', requestedAt: ago(31) }));
     await repo.devices.upsert(row({ deviceId: 'old', status: 'revoked', revokedAt: ago(400), requestedAt: ago(500) }));
     await repo.devices.upsert(row({ deviceId: 'spam', status: 'pending', requestedAt: ago(31) }));
-    expect(await runCleanup(repo, NOW)).toEqual({ cleared: 2, deleted: 1 });
+    await repo.events.insert({ ts: ago(400), kind: 'view', path: '/', ref: null });
+    await repo.events.insert({ ts: ago(10), kind: 'view', path: '/', ref: null });
+    expect(await runCleanup(repo, NOW)).toEqual({ cleared: 2, deleted: 1, events: 1 });
+    expect((await repo.events.list(ago(1000))).length).toBe(1);
     const left = await repo.devices.list();
     expect(left.map((r) => r.deviceId).sort()).toEqual(['keep', 'spam']);
     expect(left.every((r) => r.depositor === null)).toBe(true);
@@ -82,6 +85,6 @@ describe('GET /api/cron/cleanup', () => {
   it('맞는 bearer → 200', async () => {
     const res = await call('Bearer s3cret');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ cleared: 0, deleted: 0 });
+    expect(await res.json()).toEqual({ cleared: 0, deleted: 0, events: 0 });
   });
 });

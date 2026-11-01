@@ -1,3 +1,4 @@
+import type { EventRow } from './events';
 import type { DeviceRow } from './license';
 import type { ReleaseRow, Repo } from './repo';
 
@@ -17,6 +18,7 @@ export function createMemoryRepo(): Repo {
   let releases: ReleaseRow[] = [];
   let nextId = 1;
   const settings = { ...DEFAULT_SETTINGS };
+  let events: EventRow[] = [];
 
   return {
     devices: {
@@ -71,6 +73,19 @@ export function createMemoryRepo(): Repo {
       },
       async set(key, value) {
         settings[key] = value;
+      },
+    },
+    events: {
+      async insert(e) {
+        events.push({ ...e });
+      },
+      async list(since) {
+        return events.filter((e) => e.ts >= since).sort((a, b) => a.ts.getTime() - b.ts.getTime()).map((e) => ({ ...e }));
+      },
+      async deleteBefore(before) {
+        const n = events.length;
+        events = events.filter((e) => e.ts >= before);
+        return n - events.length;
       },
     },
   };

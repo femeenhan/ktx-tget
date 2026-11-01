@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../admin/require-admin', () => ({ requireAdmin: async () => {} }));
 import { resetRepoForTests } from '../../../../lib/repo';
-import { GET as version } from '../../version/route';
+import { GET as versionGet } from '../../version/route';
 import { GET as list, POST as create } from './route';
 import { POST as setLatest } from './[id]/latest/route';
 
 process.env.REPO = 'memory';
 
+const version = () => versionGet(new Request('http://x/api/version'));
 const body = (o: object) =>
   new Request('http://x/api/admin/releases', { method: 'POST', body: JSON.stringify(o), headers: { 'content-type': 'application/json' } });
 const rel = (n: number) => ({ versionCode: n, versionName: `1.0.${n}`, blobUrl: `https://blob.example/apk/${n}.apk`, sizeBytes: 1000 + n, notes: 'n' });
@@ -20,7 +21,7 @@ describe('releases API', () => {
     expect(res.status).toBe(201);
     const v = await (await version()).json();
     expect(v.versionCode).toBe(1);
-    expect(v.url).toBe('https://blob.example/apk/1.apk');
+    expect(v.url).toBe('http://x/api/download?src=app');
   });
 
   it('두 번째 등록이 최신, setLatest로 되돌림', async () => {

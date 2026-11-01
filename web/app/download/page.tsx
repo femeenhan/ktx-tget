@@ -69,7 +69,7 @@ export default async function DownloadPage() {
           <div className="release" style={{ marginTop: 28 }}>
             {release ? (
               <>
-                <a href={release.blobUrl} className="btn btn-primary btn-block" download={`ktx-tget-${release.versionName}.apk`}>
+                <a href="/api/download?src=web" className="btn btn-primary btn-block" download={`ktx-tget-${release.versionName}.apk`}>
                   ktx-tget {release.versionName} 다운로드
                 </a>
                 <p className="release-meta">

@@ -6,6 +6,8 @@ import { POST as requestPost } from './request/route';
 import { GET as statusGet } from './status/route';
 import { GET as configGet } from '../config/route';
 import { GET as versionGet } from '../version/route';
+import { GET as downloadGet } from '../download/route';
+import { POST as trackPost } from '../track/route';
 
 const ID = 'a1b2c3d4e5f60718';
 
@@ -77,6 +79,14 @@ describe('POST /api/device/request', () => {
     expect(j.status).toBe('active');
     expect(j.trial).toBe(false);
     expect(new Date(j.expiresAt).getTime()).toBe(now.getTime() + 24 * 3600_000);
+  });
+  it('요청은 request 이벤트(new/renewal + plan)로 남는다', async () => {
+    await post({ ...valid, plan: 'day' });
+    const repo = getRepo();
+    await repo.devices.upsert(approve((await repo.devices.get(ID))!, 'day', new Date()));
+    await post({ ...valid, plan: 'year' });
+    const ev = await repo.events.list(new Date(0));
+    expect(ev.map((e) => [e.kind, e.path, e.ref])).toEqual([['request', 'new', 'day'], ['request', 'renewal', 'year']]);
   });
   it('텔레그램 본문: 활성화 요청에 입금자명·기간·가격·임시 이용 종료 시각', async () => {
     await getRepo().settings.set('price_day', '4900');
@@ -176,15 +186,46 @@ describe('GET /api/config', () => {
 });
 
 describe('GET /api/version', () => {
+  const vget = () => versionGet(new Request('https://tget.example/api/version'));
   it('릴리스 없으면 404', async () => {
-    const res = await versionGet();
+    const res = await vget();
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'no release' });
   });
   it('최신 릴리스 반환', async () => {
     await getRepo().releases.insert({ versionCode: 7, versionName: '1.7', blobUrl: 'https://b/x.apk', sizeBytes: 123, notes: '메모' });
-    expect(await (await versionGet()).json()).toEqual({
-      versionCode: 7, versionName: '1.7', url: 'https://b/x.apk', sizeBytes: 123, notes: '메모',
+    expect(await (await vget()).json()).toEqual({
+      versionCode: 7, versionName: '1.7', url: 'https://tget.example/api/download?src=app', sizeBytes: 123, notes: '메모',
     });
+  });
+});
+
+describe('GET /api/download', () => {
+  it('릴리스 없으면 404', async () => {
+    expect((await downloadGet(new Request('http://x/api/download'))).status).toBe(404);
+  });
+  it('최신 Blob으로 302하고 download 이벤트(web/app)를 남긴다', async () => {
+    await getRepo().releases.insert({ versionCode: 7, versionName: '1.7', blobUrl: 'https://b/x.apk', sizeBytes: 123, notes: null });
+    const res = await downloadGet(new Request('http://x/api/download?src=app'));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://b/x.apk');
+    await downloadGet(new Request('http://x/api/download'));
+    const ev = await getRepo().events.list(new Date(0));
+    expect(ev.map((e) => [e.kind, e.path])).toEqual([['download', 'app'], ['download', 'web']]);
+  });
+});
+
+describe('POST /api/track', () => {
+  const track = (body: unknown, referer = 'https://tget.example/') =>
+    trackPost(new Request('https://tget.example/api/track', { method: 'POST', body: JSON.stringify(body), headers: { referer } }));
+  it('허용 경로만 view 이벤트로 남기고, 유입 출처는 호스트만', async () => {
+    expect((await track({ path: '/download', ref: 'https://www.google.com/search?q=x' })).status).toBe(204);
+    expect((await track({ path: '/admin' })).status).toBe(204);
+    expect((await track({ path: '/', ref: 'https://tget.example/download' })).status).toBe(204);
+    const ev = await getRepo().events.list(new Date(0));
+    expect(ev.map((e) => [e.path, e.ref])).toEqual([['/download', 'www.google.com'], ['/', null]]);
+  });
+  it('깨진 본문도 204', async () => {
+    expect((await trackPost(new Request('http://x/api/track', { method: 'POST', body: '{' }))).status).toBe(204);
   });
 });

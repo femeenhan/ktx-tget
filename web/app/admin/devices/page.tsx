@@ -20,7 +20,7 @@ export default async function DevicesPage() {
         <thead>
           <tr>
             <th>요청 시각</th><th>입금자명</th><th>요청 기간</th><th>기기 ID</th>
-            <th>상태</th><th>만료일</th><th>메모</th><th>동작</th>
+            <th>상태</th><th>만료일</th><th>마지막 확인</th><th>메모</th><th>동작</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +46,8 @@ export default async function DevicesPage() {
                     : row.expiresAt ? formatKst(row.expiresAt) : '영구'
               }
               note={row.note ?? ''}
+              lastSeen={row.lastSeenAt ? formatKst(row.lastSeenAt) : '-'}
+              appVersion={row.appVersion}
             />
             );
           })}

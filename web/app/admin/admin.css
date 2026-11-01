@@ -9,3 +9,11 @@
 .row-error { color: crimson; margin: 4px 0 0; }
 .upload-form { margin-bottom: 24px; }
 .saved { color: green; }
+.muted-cell { color: #666; font-size: 12px; }
+.stats-period a { margin-right: 12px; }
+.stats-period a[aria-current="true"] { font-weight: bold; text-decoration: none; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 16px 0 24px; }
+.stats-grid table { font-size: 14px; }
+.stats-grid caption { text-align: left; font-weight: bold; padding: 0 0 6px; }
+.stats-note { color: #666; font-size: 13px; margin: 0 0 12px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }

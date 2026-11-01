@@ -1,5 +1,6 @@
 import { after } from 'next/server';
 import { PLANS, applyRequest, type Plan } from '../../../../lib/license';
+import { recordEvent } from '../../../../lib/events';
 import { formatRequestMessage, sendTelegram } from '../../../../lib/notify';
 import { buildStatusResponse, normalizeNotice, parseDeviceId } from '../../../../lib/device-response';
 import { getRepo } from '../../../../lib/repo';
@@ -33,6 +34,8 @@ export async function POST(req: Request): Promise<Response> {
     deviceId, depositor, plan: body.plan as Plan, versionCode, now,
   });
   await repo.devices.upsert(row);
+  // 활성 중 요청은 연장(pendingPlan), 그 외는 신규 요청으로 센다.
+  await recordEvent(repo, { ts: now, kind: 'request', path: row.pendingPlan !== null && row.status !== 'pending' ? 'renewal' : 'new', ref: body.plan as string });
   const settings = await repo.settings.all();
   const notify = () => sendTelegram(formatRequestMessage(row, settings, now));
   // 응답을 먼저 보내고 알림은 뒤에. 테스트처럼 요청 범위 밖이면 after가 던지므로 바로 실행한다.

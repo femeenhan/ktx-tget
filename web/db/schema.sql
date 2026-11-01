@@ -25,6 +25,15 @@ create table if not exists releases (
   uploaded_at timestamptz not null
 );
 
+create table if not exists events (
+  id bigserial primary key,
+  ts timestamptz not null,
+  kind text not null,
+  path text,
+  ref text
+);
+create index if not exists events_ts_idx on events (ts);
+
 create table if not exists settings (
   key text primary key,
   value text not null

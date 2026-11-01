@@ -1,3 +1,4 @@
+import { EVENT_RETENTION_MS } from './events';
 import { computeStatus, type DeviceRow } from './license';
 import type { Repo } from './repo';
 
@@ -36,7 +37,7 @@ export function selectRowsToDelete(rows: DeviceRow[], now: Date): string[] {
     .map((r) => r.deviceId);
 }
 
-export async function runCleanup(repo: Repo, now: Date): Promise<{ cleared: number; deleted: number }> {
+export async function runCleanup(repo: Repo, now: Date): Promise<{ cleared: number; deleted: number; events: number }> {
   const rows = await repo.devices.list();
   const toDelete = selectRowsToDelete(rows, now);
   for (const id of toDelete) await repo.devices.delete(id);
@@ -44,5 +45,6 @@ export async function runCleanup(repo: Repo, now: Date): Promise<{ cleared: numb
   const toClear = selectDepositorsToClear(rows, now).filter((id) => !gone.has(id));
   // 전체 행을 다시 쓰지 않고 depositor만 비워, 그 사이 들어온 요청·승인을 덮어쓰지 않는다.
   if (toClear.length > 0) await repo.devices.clearDepositor(toClear);
-  return { cleared: toClear.length, deleted: toDelete.length };
+  const events = await repo.events.deleteBefore(new Date(now.getTime() - EVENT_RETENTION_MS));
+  return { cleared: toClear.length, deleted: toDelete.length, events };
 }

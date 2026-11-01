@@ -1,3 +1,4 @@
+import type { EventRow } from './events';
 import type { DeviceRow, DeviceStatus, Plan } from './license';
 import { sql } from './db';
 import { createMemoryRepo } from './repo.memory';
@@ -34,6 +35,13 @@ export interface Repo {
   settings: {
     all(): Promise<Record<string, string>>;
     set(key: string, value: string): Promise<void>;
+  };
+  events: {
+    insert(e: EventRow): Promise<void>;
+    /** ts >= since, 오래된 것부터. */
+    list(since: Date): Promise<EventRow[]>;
+    /** ts < before 삭제, 지운 수. */
+    deleteBefore(before: Date): Promise<number>;
   };
 }
 
@@ -72,6 +80,18 @@ function toRelease(r: R): ReleaseRow {
     uploadedAt: toDate(r.uploaded_at)!,
   };
 }
+
+// events 표는 배포 순서와 무관하게 쓰이도록 첫 사용 때 만든다(마이그레이션을 안 돌려도 동작).
+let eventsReady: Promise<void> | undefined;
+const ensureEvents = (): Promise<void> =>
+  (eventsReady ??= (async () => {
+    await sql`create table if not exists events (id bigserial primary key, ts timestamptz not null, kind text not null, path text, ref text)`;
+    await sql`create index if not exists events_ts_idx on events (ts)`;
+  })().catch((e) => { eventsReady = undefined; throw e; }));
+
+const toEvent = (r: R): EventRow => ({
+  ts: toDate(r.ts)!, kind: r.kind as EventRow['kind'], path: (r.path as string | null) ?? null, ref: (r.ref as string | null) ?? null,
+});
 
 export function createNeonRepo(): Repo {
   return {
@@ -150,6 +170,21 @@ export function createNeonRepo(): Repo {
       async set(key, value) {
         await sql`insert into settings (key, value) values (${key}, ${value})
           on conflict (key) do update set value = excluded.value`;
+      },
+    },
+    events: {
+      async insert(e) {
+        await ensureEvents();
+        await sql`insert into events (ts, kind, path, ref) values (${e.ts}, ${e.kind}, ${e.path}, ${e.ref})`;
+      },
+      async list(since) {
+        await ensureEvents();
+        return (await sql`select ts, kind, path, ref from events where ts >= ${since} order by ts`).map(toEvent);
+      },
+      async deleteBefore(before) {
+        await ensureEvents();
+        const rows = await sql`with d as (delete from events where ts < ${before} returning 1) select count(*)::int as n from d`;
+        return Number(rows[0]?.n ?? 0);
       },
     },
   };

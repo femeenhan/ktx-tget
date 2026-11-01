@@ -1,3 +1,4 @@
+import { Beacon } from './Beacon';
 import { Footer } from './Footer';
 import { SiteHeader } from './SiteHeader';
 import { contactHref } from './site-data';
@@ -10,6 +11,7 @@ export function SiteShell({ children, settings }: { children: React.ReactNode; s
       <SiteHeader contact={contactHref(settings)} />
       <main id="main">{children}</main>
       <Footer settings={settings} />
+      <Beacon />
     </div>
   );
 }

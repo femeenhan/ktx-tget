@@ -1,5 +1,6 @@
 import { PLANS, approve, computeStatus, extend, revoke, type DeviceRow, type Plan } from '../../../lib/license';
 import type { Repo } from '../../../lib/repo';
+import { recordEvent } from '../../../lib/events';
 
 
 function checkPlan(plan: string): asserts plan is Plan {
@@ -17,6 +18,7 @@ export async function approveDeviceCore(repo: Repo, id: string, plan: Plan, now:
   const row = await load(repo, id);
   if (computeStatus(row, now) !== 'pending') throw new Error('not pending');
   await repo.devices.upsert(approve(row, plan, now));
+  await recordEvent(repo, { ts: now, kind: 'approve', path: 'new', ref: plan });
 }
 
 export async function extendDeviceCore(repo: Repo, id: string, plan: Plan, now: Date): Promise<void> {
@@ -25,6 +27,7 @@ export async function extendDeviceCore(repo: Repo, id: string, plan: Plan, now: 
   const s = computeStatus(row, now);
   if (s !== 'active' && s !== 'expired') throw new Error('not extendable');
   await repo.devices.upsert(extend(row, plan, now));
+  await recordEvent(repo, { ts: now, kind: 'approve', path: 'extend', ref: plan });
 }
 
 export async function revokeDeviceCore(repo: Repo, id: string, now: Date): Promise<void> {

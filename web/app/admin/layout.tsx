@@ -10,6 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/devices">기기</Link>
           <Link href="/admin/releases">릴리스</Link>
           <Link href="/admin/settings">설정</Link>
+          <Link href="/admin/stats">통계</Link>
         </nav>
         <LogoutButton />
       </header>

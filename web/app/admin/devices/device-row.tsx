@@ -17,6 +17,9 @@ interface Props {
   trial: boolean;
   expiresAt: string;
   note: string;
+  /** 앱이 마지막으로 상태를 물은 시각(KST). 서비스가 켜져 있으면 30분마다, 대기·임시 이용 중이면 1분마다 갱신. */
+  lastSeen: string;
+  appVersion: number | null;
 }
 
 export function DeviceRowView(p: Props) {
@@ -49,6 +52,10 @@ export function DeviceRowView(p: Props) {
         {p.trial && <> <span className="badge">임시 이용 중</span></>}
       </td>
       <td>{p.expiresAt}</td>
+      <td>
+        {p.lastSeen}
+        {p.appVersion !== null && <><br /><span className="muted-cell">v{p.appVersion}</span></>}
+      </td>
       <td>
         <input value={note} onChange={(e) => setNote(e.target.value)} aria-label="메모" />{' '}
         <button type="button" disabled={busy} onClick={() => act(() => saveNote(p.id, note))}>저장</button>
