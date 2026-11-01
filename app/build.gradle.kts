@@ -50,7 +50,7 @@ android {
         targetSdk = 35
         // versionCode는 versionName에서 자동으로 만든다: X.Y.Z → X*10000 + Y*100 + Z (0.3.3 → 303).
         // 올릴 때는 versionName 한 줄만 바꾼다. 판매 웹 관리자 폼도 같은 공식으로 계산한다(web/lib/version-code.ts).
-        versionName = "0.3.3"
+        versionName = "0.3.4"
         versionCode = versionCodeOf(versionName!!)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
@@ -107,5 +107,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
     testImplementation("junit:junit:4.13.2")
+    // JVM 단위 테스트에서 android.jar의 org.json 스텁 대신 쓰는 실제 구현(LicenseApi.parseSnapshot 테스트용)
+    testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

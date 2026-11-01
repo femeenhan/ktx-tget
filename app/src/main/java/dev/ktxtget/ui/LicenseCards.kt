@@ -57,7 +57,8 @@ import dev.ktxtget.ui.theme.MonoFamily
 import dev.ktxtget.ui.theme.Sage
 
 private const val DEPOSITOR_MAX_LENGTH: Int = 40
-private const val HOUR_MS: Long = 3600L * 1000
+private const val MINUTE_MS: Long = 60L * 1000
+private const val HOUR_MS: Long = 60L * MINUTE_MS
 private const val DAY_MS: Long = 24L * HOUR_MS
 private const val EXPIRY_WARN_MS: Long = 7L * DAY_MS
 private val NoticeShape = RoundedCornerShape(16.dp)
@@ -94,6 +95,14 @@ fun hoursLeft(s: LicenseSnapshot, nowWallMs: Long): Long? {
     val left: Long = expires - serverNow(s, nowWallMs)
     if (left <= 0) return 0
     return (left + HOUR_MS - 1) / HOUR_MS
+}
+
+/** 만료까지 남은 분(올림, 최소 0). 임시 이용처럼 한 시간 안짝일 때 쓴다. */
+fun minutesLeft(s: LicenseSnapshot, nowWallMs: Long): Long? {
+    val expires: Long = s.expiresAtEpochMs ?: return null
+    val left: Long = expires - serverNow(s, nowWallMs)
+    if (left <= 0) return 0
+    return (left + MINUTE_MS - 1) / MINUTE_MS
 }
 
 /** 활성 상태면 늘 보여 준다. 기한이 있는 이용자는 남은 시간을, 영구 이용자는 「영구」를 본다. */
@@ -436,7 +445,10 @@ fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, 
     val days: Long? = daysLeft(snapshot, nowWallMs)
     val hours: Long? = hoursLeft(snapshot, nowWallMs)
     val expires: Long? = snapshot.expiresAtEpochMs
+    val minutes: Long? = minutesLeft(snapshot, nowWallMs)
     val leftText: String = when {
+        // 임시 이용: 입금 확인 전이라 「연장」이 아니라 승인을 기다리는 상태임을 분 단위로 보여 준다.
+        snapshot.trial && minutes != null -> stringResource(R.string.license_trial_minutes_left, minutes)
         expires == null || days == null || hours == null -> stringResource(R.string.license_lifetime_line)
         hours <= 24 -> stringResource(R.string.license_hours_left_until, hours, expiryDateText(expires, withTime = true))
         else -> stringResource(R.string.license_days_left_until, days, expiryDateText(expires, withTime = false))
@@ -456,7 +468,9 @@ fun ExpiryLine(snapshot: LicenseSnapshot, nowWallMs: Long, onRenew: () -> Unit, 
             color = Ink,
             modifier = Modifier.weight(1f),
         )
-        if (snapshot.renewalPending) {
+        if (snapshot.trial) {
+            Text(text = stringResource(R.string.license_trial_pending), fontSize = 13.sp, color = InkSecondary)
+        } else if (snapshot.renewalPending) {
             Text(text = stringResource(R.string.license_renewal_pending), fontSize = 13.sp, color = InkSecondary)
         } else if (expires != null) {
             LineButton(

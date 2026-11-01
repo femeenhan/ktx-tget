@@ -168,15 +168,17 @@ fun MainScreen(repository: MacroPreferencesRepository, onOpenLog: () -> Unit, on
             null
         }
     }
-    LaunchedEffect(licenseUi == LicenseStatus.PENDING) {
-        if (licenseUi != LicenseStatus.PENDING) return@LaunchedEffect
+    // 승인을 기다리는 동안(대기, 또는 입금 확인 전 임시 이용) 1분마다 상태를 다시 받아 승인·종료를 바로 반영한다.
+    val awaitingApproval: Boolean = licenseUi == LicenseStatus.PENDING || licenseSnapshot?.trial == true
+    LaunchedEffect(awaitingApproval) {
+        if (!awaitingApproval) return@LaunchedEffect
         while (isActive) {
             delay(60_000)
             LicenseManager.refresh(context)
         }
     }
     LaunchedEffect(licenseSnapshot?.renewalPending, licenseUi) {
-        if (licenseSnapshot?.renewalPending == true || licenseUi != LicenseStatus.ACTIVE) showRenew = false
+        if (licenseSnapshot?.renewalPending == true || licenseSnapshot?.trial == true || licenseUi != LicenseStatus.ACTIVE) showRenew = false
     }
     LaunchedEffect(licenseUi) { requestError = null }
     fun submitRequest(depositor: String, plan: String) {

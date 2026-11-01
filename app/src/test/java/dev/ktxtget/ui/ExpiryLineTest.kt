@@ -18,6 +18,7 @@ class ExpiryLineTest {
         status: LicenseStatus = LicenseStatus.ACTIVE,
         renewalPending: Boolean = false,
         serverSkew: Long = 0L,
+        trial: Boolean = false,
     ): LicenseSnapshot = LicenseSnapshot(
         status = status,
         expiresAtEpochMs = expiresAt,
@@ -26,7 +27,22 @@ class ExpiryLineTest {
         checkedAtWallMs = now,
         renewalPending = renewalPending,
         notice = null,
+        trial = trial,
     )
+
+    @Test
+    fun minutesLeftRoundsUpAndClampsAtZero() {
+        val minute: Long = 60L * 1000
+        assertEquals(60L, minutesLeft(snap(now + hour, trial = true), now))
+        assertEquals(1L, minutesLeft(snap(now + 30 * 1000, trial = true), now))
+        assertEquals(0L, minutesLeft(snap(now - minute, trial = true), now))
+        assertNull(minutesLeft(snap(null), now))
+    }
+
+    @Test
+    fun trialIsStillShownAsActiveLine() {
+        assertTrue(shouldShowExpiryLine(snap(now + hour, trial = true), now))
+    }
 
     @Test
     fun daysLeftRoundsUpAndClampsAtZero() {

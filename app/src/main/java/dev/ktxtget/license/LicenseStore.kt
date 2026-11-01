@@ -21,6 +21,7 @@ class LicenseStore(context: Context) {
             checkedAtWallMs = prefs.getLong(KEY_CHECKED_WALL, 0L),
             renewalPending = prefs.getBoolean(KEY_RENEWAL_PENDING, false),
             notice = prefs.getString(KEY_NOTICE, null),
+            trial = prefs.getBoolean(KEY_TRIAL, false),
         )
     }
 
@@ -32,6 +33,7 @@ class LicenseStore(context: Context) {
             putLong(KEY_CHECKED_ELAPSED, s.checkedAtElapsedMs)
             putLong(KEY_CHECKED_WALL, s.checkedAtWallMs)
             putBoolean(KEY_RENEWAL_PENDING, s.renewalPending)
+            putBoolean(KEY_TRIAL, s.trial)
             if (s.notice != null) putString(KEY_NOTICE, s.notice) else remove(KEY_NOTICE)
         }.apply()
     }
@@ -46,5 +48,6 @@ class LicenseStore(context: Context) {
         const val KEY_CHECKED_WALL = "checked_at_wall"
         const val KEY_RENEWAL_PENDING = "renewal_pending"
         const val KEY_NOTICE = "notice"
+        const val KEY_TRIAL = "trial"
     }
 }

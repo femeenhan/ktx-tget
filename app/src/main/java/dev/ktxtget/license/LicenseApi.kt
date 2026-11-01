@@ -109,7 +109,12 @@ class LicenseApi(baseUrl: String) {
     companion object {
         private const val TIMEOUT_MS: Int = 8000
 
-        internal fun parseSnapshot(text: String): LicenseSnapshot {
+        /** 시계 값은 JVM 단위 테스트에서 넘겨 줄 수 있게 매개변수로 둔다(기본값은 호출 시점에만 읽힌다). */
+        internal fun parseSnapshot(
+            text: String,
+            checkedAtElapsedMs: Long = SystemClock.elapsedRealtime(),
+            checkedAtWallMs: Long = System.currentTimeMillis(),
+        ): LicenseSnapshot {
             val json = JSONObject(text)
             val status: LicenseStatus = when (val raw = json.getString("status")) {
                 "none" -> LicenseStatus.NONE
@@ -125,10 +130,11 @@ class LicenseApi(baseUrl: String) {
                 status = status,
                 expiresAtEpochMs = expiresAt,
                 serverTimeEpochMs = Instant.parse(json.getString("serverTime")).toEpochMilli(),
-                checkedAtElapsedMs = SystemClock.elapsedRealtime(),
-                checkedAtWallMs = System.currentTimeMillis(),
+                checkedAtElapsedMs = checkedAtElapsedMs,
+                checkedAtWallMs = checkedAtWallMs,
                 renewalPending = json.optBoolean("renewalPending", false),
                 notice = if (json.isNull("notice")) null else json.getString("notice"),
+                trial = json.optBoolean("trial", false),
             )
         }
     }

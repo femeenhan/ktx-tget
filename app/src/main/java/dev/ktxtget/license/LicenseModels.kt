@@ -14,6 +14,8 @@ data class LicenseSnapshot(
     val checkedAtWallMs: Long,
     val renewalPending: Boolean,
     val notice: String?,
+    /** 입금 확인 전 임시 이용 중. status는 ACTIVE, expiresAt은 임시 이용이 끝나는 시각. 서버 0.3.4+가 보낸다. */
+    val trial: Boolean = false,
 )
 
 data class AppConfig(
