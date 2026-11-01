@@ -56,12 +56,13 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 
 - 팀 `femeenhans-projects`, 프로젝트 **`tget-web`**. 함수 리전 `sin1`(싱가포르, Neon DB와 같은 곳), `web/vercel.json`에 cron(매일 18:00 UTC = 03:00 KST)이 있습니다.
 - 배포는 **GitHub 연동**으로 합니다(2026-10-31부터). 저장소 `femeenhan/ktx-tget`, 프로덕션 브랜치 `tget-web`, 루트 디렉터리 `web`. `tget-web`에 푸시하면 자동으로 운영 배포되고, 다른 브랜치 푸시는 프리뷰 배포가 됩니다.
-- 급할 때는 CLI로도 올릴 수 있습니다. 프로젝트는 반드시 `tget-web` 하나만 씁니다(다른 프로젝트를 만들면 도메인·환경변수가 없어 404가 납니다).
+- 급할 때는 CLI로도 올릴 수 있습니다. 프로젝트는 반드시 `tget-web` 하나만 씁니다(다른 프로젝트를 만들면 도메인·환경변수가 없어 404가 납니다). 루트 디렉터리가 `web`으로 설정돼 있으므로 **저장소 루트에서** 실행합니다(`web/` 안에서 하면 `web/web`이 없다는 오류가 납니다).
   ```bash
-  cd web
+  cd ~/workspace/ktx_tget            # 저장소 루트
   vercel link --yes --project tget-web --scope femeenhans-projects   # 새 PC에서 처음 한 번
   vercel deploy --prod
   ```
+- 환경변수를 바꾼 뒤에도 같은 명령으로 재배포합니다(`vercel redeploy --prod`는 이 CLI 버전에 없습니다).
 - 기본 주소: https://tget-web.vercel.app (커스텀 도메인 연결 전에도 동작)
 
 ### 환경변수
@@ -77,7 +78,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
 
 - 직접 생성한 세 값은 **`~/keystores/tget-web-secrets.txt`**(권한 600)에 있습니다. 1Password 등에 옮겨 두세요.
 - 이 셋은 Vercel에서 민감(sensitive) 변수라 `vercel env pull`로 값이 내려오지 않습니다(빈 값). 로컬에서 쓰려면 위 파일에서 복사합니다.
-- 값을 바꿀 때: `printf '%s' "새값" | vercel env add ADMIN_PASSWORD production --force` (preview도 같은 방식) 후 `vercel deploy --prod`.
+- 값을 바꿀 때: `printf '%s' "새값" | vercel env add ADMIN_PASSWORD production --force` (preview도 같은 방식) 후 저장소 루트에서 `vercel deploy --prod`.
 
 ### 요청 알림(텔레그램)과 임시 이용
 
@@ -87,7 +88,7 @@ Kotlin(Android 네이티브)로 개발하는 **ktx-tget** 저장소입니다. Fl
   cd web
   printf '%s' "<토큰>" | vercel env add TELEGRAM_BOT_TOKEN production --sensitive
   printf '%s' "<chat id>" | vercel env add TELEGRAM_CHAT_ID production
-  vercel redeploy --prod   # 또는 아무 커밋을 tget-web에 푸시
+  cd .. && vercel deploy --prod   # 저장소 루트에서. 또는 아무 커밋을 tget-web에 푸시
   ```
 - 임시 이용: 기기가 **처음** 요청을 보내면 입금 확인 전에도 **1시간**(`TRIAL_MS`) 동안 바로 쓸 수 있습니다. 관리자 목록에는 「대기 · 임시 이용 중」과 끝나는 시각이 보이고, 그 안에 승인하면 정식 기간으로 이어집니다. 1시간이 지나면 앱이 「승인 대기 중」으로 잠깁니다. 만료·회수 뒤 다시 요청하는 기기에는 주지 않습니다.
 
